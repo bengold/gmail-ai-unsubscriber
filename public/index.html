@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gmail AI Unsubscriber</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: #4f46e5;
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+
+        .main {
+            padding: 30px;
+        }
+
+        .step {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            transition: border-color 0.3s;
+        }
+
+        .step.active {
+            border-color: #4f46e5;
+            background: #f8faff;
+        }
+
+        .step h3 {
+            color: #374151;
+            margin-bottom: 15px;
+            font-size: 1.3rem;
+        }
+
+        .button {
+            background: #4f46e5;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background 0.3s;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+
+        .button:hover {
+            background: #3730a3;
+        }
+
+        .button:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+
+        .button.secondary {
+            background: #6b7280;
+            color: white;
+        }
+
+        .button.secondary:hover {
+            background: #4b5563;
+        }
+
+        .input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e5e7eb;
+            border-radius: 6px;
+            font-size: 1rem;
+            margin-bottom: 15px;
+        }
+
+        .input:focus {
+            outline: none;
+            border-color: #4f46e5;
+        }
+
+        .status {
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+
+        .status.success {
+            background: #d1fae5;
+            color: #065f46;
+            border: 1px solid #a7f3d0;
+        }
+
+        .status.error {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fca5a5;
+        }
+
+        .status.info {
+            background: #dbeafe;
+            color: #1e40af;
+            border: 1px solid #93c5fd;
+        }
+
+        .email-list {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+        }
+
+        .email-groups {
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .email-group {
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            background: white;
+        }
+
+        .group-header {
+            padding: 20px;
+            background: #f9fafb;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-radius: 8px 8px 0 0;
+        }
+
+        .group-info h4 {
+            margin: 0 0 8px 0;
+            color: #374151;
+            font-size: 1.1rem;
+        }
+
+        .group-details {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .email-count {
+            background: #3b82f6;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        .domain {
+            color: #6b7280;
+            font-family: monospace;
+            font-size: 0.9rem;
+        }
+
+        .group-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .group-actions .button.danger {
+            background: #dc2626;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+
+        .group-actions .button.danger:hover {
+            background: #b91c1c;
+        }
+
+        .no-unsubscribe {
+            color: #6b7280;
+            font-style: italic;
+            font-size: 0.9rem;
+        }
+
+        .group-emails {
+            padding: 0 20px 20px 20px;
+        }
+
+        .group-emails details {
+            margin-top: 10px;
+        }
+
+        .group-emails summary {
+            cursor: pointer;
+            color: #4f46e5;
+            font-weight: 500;
+            padding: 5px 0;
+        }
+
+        .group-emails summary:hover {
+            color: #3730a3;
+        }
+
+        .group-emails .email-list {
+            margin-top: 10px;
+            max-height: 300px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #6b7280;
+        }
+
+        .spinner {
+            border: 4px solid #f3f4f6;
+            border-top: 4px solid #4f46e5;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .progress-container {
+            padding: 20px;
+            background: #f8fafc;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .progress-message {
+            font-weight: 500;
+            color: #374151;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        .progress-bar-container {
+            background: #e5e7eb;
+            border-radius: 8px;
+            height: 8px;
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+
+        .progress-bar {
+            background: linear-gradient(90deg, #4f46e5, #7c3aed);
+            height: 100%;
+            border-radius: 8px;
+            transition: width 0.3s ease;
+            min-width: 2px;
+        }
+
+        .progress-text {
+            text-align: center;
+            font-size: 0.9rem;
+            color: #6b7280;
+            font-weight: 500;
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 Gmail AI Unsubscriber</h1>
+            <p>Automatically find and unsubscribe from junk emails using AI</p>
+        </div>
+
+        <div class="main">
+            <!-- Step 1: Authentication -->
+            <div class="step active" id="step1">
+                <h3>Step 1: Connect your Gmail account</h3>
+                <div id="authStatus"></div>
+                <button class="button" onclick="authenticate()">Connect Gmail</button>
+            </div>
+
+            <!-- Step 2: Scan emails -->
+            <div class="step" id="step2">
+                <h3>Step 2: Scan for junk emails</h3>
+                <div id="scanStatus"></div>
+                <button class="button" onclick="scanEmails()" id="scanButton" disabled>Scan Emails</button>
+            </div>
+
+            <!-- Step 3: Review results -->
+            <div class="step" id="step3">
+                <h3>Step 3: Review found emails</h3>
+                <div id="emailList"></div>
+            </div>
+
+            <!-- Skipped Senders Management -->
+            <div class="step" id="skipListSection" style="display: none;">
+                <h3>Skipped Senders</h3>
+                <p>These senders won't appear in future scans. Click to remove from skip list.</p>
+                <div id="skipList"></div>
+                <button class="button secondary" onclick="toggleSkipList()">Hide Skipped Senders</button>
+            </div>
+        </div>
+
+        <!-- Show/hide skip list button -->
+        <div style="text-align: center; margin-top: 20px;">
+            <button class="button secondary" onclick="toggleSkipList()" id="skipListToggle">Show Skipped Senders</button>
+        </div>
+    </div>
+
+    <script>
+        let junkEmails = [];
+        let isAuthenticated = false;
+
+        async function authenticate() {
+            try {
+                const response = await fetch('/api/emails/auth-url');
+                const data = await response.json();
+                
+                if (data.authUrl) {
+                    // Redirect to Google OAuth instead of opening popup
+                    window.location.href = data.authUrl;
+                }
+            } catch (error) {
+                showStatus('authStatus', 'Failed to get authentication URL', 'error');
+            }
+        }
+
+        async function scanEmails() {
+            if (!isAuthenticated) return;
+
+            document.getElementById('scanButton').disabled = true;
+            
+            // Show initial progress
+            showProgress('scanStatus', 'Starting email scan...', 0, 0);
+            
+            try {
+                // Start the scan (non-blocking)
+                const scanPromise = fetch('/api/emails/scan');
+                
+                // Poll for progress updates
+                const progressInterval = setInterval(async () => {
+                    try {
+                        const progressResponse = await fetch('/api/emails/progress');
+                        const progress = await progressResponse.json();
+                        
+                        if (progress.status === 'preprocessing') {
+                            const progressText = `Preprocessing emails... (${progress.preprocessed}/${progress.total})`;
+                            const progressPercent = progress.total > 0 
+                                ? Math.round((progress.preprocessed / progress.total) * 100)
+                                : 0;
+                            showProgress('scanStatus', progressText, progressPercent, progress.total);
+                            
+                        } else if (progress.status === 'ai-analysis') {
+                            const progressText = `AI analyzing batch ${progress.currentBatch}/${progress.totalBatches} (${progress.aiCalls} AI calls made)`;
+                            // For AI analysis, calculate based on total processed vs total
+                            const progressPercent = progress.total > 0 
+                                ? Math.round((progress.processed / progress.total) * 100)
+                                : 0;
+                            showProgress('scanStatus', progressText, progressPercent, progress.total);
+                            
+                        } else if (progress.status === 'starting') {
+                            showProgress('scanStatus', 'Starting email scan...', 0, 0);
+                            
+                        } else if (progress.status === 'complete' || progress.status === 'error') {
+                            clearInterval(progressInterval);
+                        }
+                    } catch (error) {
+                        console.log('Progress update failed:', error);
+                    }
+                }, 1000); // Update every second
+                
+                // Wait for scan to complete
+                const response = await scanPromise;
+                const data = await response.json();
+                
+                // Clear progress polling
+                clearInterval(progressInterval);
+
+                if (response.ok) {
+                    const groups = data.groups || [];
+                    const stats = data.stats || {};
+                    
+                    showStatus('scanStatus', 
+                        `✅ Scan complete! Processed ${data.processed} emails, found ${data.junkEmails} junk emails from ${groups.length} different senders. 
+                        📊 Stats: ${stats.preprocessed} auto-classified, ${stats.aiAnalyzed} AI-analyzed (${stats.totalAICalls} API calls), 
+                        ⏱️ Time: ${Math.round(stats.processingTime / 1000)}s`, 
+                        'success'
+                    );
+                    
+                    if (groups.length > 0) {
+                        displayGroupedEmails(groups);
+                        document.getElementById('step3').classList.add('active');
+                    } else {
+                        showStatus('scanStatus', 'No junk emails found! Your inbox is clean. 🎉', 'info');
+                    }
+                } else {
+                    showStatus('scanStatus', data.error || 'Scan failed', 'error');
+                }
+            } catch (error) {
+                showStatus('scanStatus', 'Scan error: ' + error.message, 'error');
+            }
+
+            document.getElementById('scanButton').disabled = false;
+        }
+
+        function displayGroupedEmails(groups) {
+            const emailList = document.getElementById('emailList');
+            
+            if (groups.length === 0) {
+                emailList.innerHTML = '<p>No emails to display</p>';
+                return;
+            }
+
+            const html = `
+                <div class="email-groups">
+                    ${groups.map((group, index) => `
+                        <div class="email-group">
+                            <div class="group-header">
+                                <div class="group-info">
+                                    <h4>${escapeHtml(group.senderName)}</h4>
+                                    <div class="group-details">
+                                        <span class="email-count">${group.count} emails</span>
+                                        <span class="confidence">${group.averageConfidence}% junk confidence</span>
+                                        <span class="domain">${escapeHtml(group.domain)}</span>
+                                    </div>
+                                </div>
+                                <div class="group-actions">
+                                    ${group.hasUnsubscribe 
+                                        ? `<button class="button danger" onclick="unsubscribeFromSender('${escapeHtml(group.domain)}', ${JSON.stringify(group.emailIds).replace(/"/g, '&quot;')})">
+                                             🚫 Unsubscribe
+                                           </button>`
+                                        : '<span class="no-unsubscribe">No unsubscribe option</span>'
+                                    }
+                                    <button class="button secondary" onclick="skipSender('${escapeHtml(group.domain)}', '${escapeHtml(group.senderName)}')">
+                                        ⏭️ Skip
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="group-emails">
+                                <details>
+                                    <summary>View ${group.count} emails</summary>
+                                    <div class="email-list">
+                                        ${group.emails.slice(0, 5).map(email => `
+                                            <div class="email-item">
+                                                <div class="email-info">
+                                                    <div class="email-subject">${escapeHtml(email.subject || 'No Subject')}</div>
+                                                    <div class="email-from">${escapeHtml(email.from || 'Unknown Sender')}</div>
+                                                </div>
+                                                <div class="confidence">
+                                                    ${Math.round(email.analysis.confidence * 100)}%
+                                                    <br>
+                                                    <small>${email.analysis.category}</small>
+                                                </div>
+                                            </div>
+                                        `).join('')}
+                                        ${group.emails.length > 5 ? `<p><em>... and ${group.emails.length - 5} more emails</em></p>` : ''}
+                                    </div>
+                                </details>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+            
+            emailList.innerHTML = html;
+        }
+
+        async function unsubscribeFromSender(senderDomain, emailIds) {
+            if (!confirm(`Are you sure you want to unsubscribe from all emails from ${senderDomain}?`)) {
+                return;
+            }
+
+            // Find the button that was clicked and disable it during the request
+            const button = event.target;
+            const originalText = button.innerHTML;
+            button.disabled = true;
+            button.innerHTML = '⏳ Unsubscribing...';
+
+            try {
+                const response = await fetch('/api/emails/unsubscribe', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ senderDomain, emailIds })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    // Show success message with archive status
+                    const archiveStatus = data.archived ? '\n📦 Emails archived successfully!' : '';
+                    const message = `Successfully unsubscribed from ${senderDomain}!\n\nMethod: ${data.method}\nAffected emails: ${data.emailCount}${archiveStatus}\n\n${data.details}`;
+                    alert(message);
+                    
+                    // Remove the email group from the UI
+                    const groupElement = button.closest('.email-group');
+                    if (groupElement) {
+                        groupElement.style.transition = 'opacity 0.3s ease-out';
+                        groupElement.style.opacity = '0';
+                        setTimeout(() => {
+                            groupElement.remove();
+                            // Update the counter if no groups remain
+                            const remainingGroups = document.querySelectorAll('.email-group');
+                            if (remainingGroups.length === 0) {
+                                document.getElementById('emailList').innerHTML = 
+                                    '<div class="status success">🎉 No more junk emails found! All senders have been unsubscribed from.</div>';
+                            }
+                        }, 300);
+                    }
+                } else {
+                    const message = `Failed to unsubscribe from ${senderDomain}\n\n${data.message || data.error || 'Unknown error'}`;
+                    alert(message);
+                    // Re-enable the button
+                    button.disabled = false;
+                    button.innerHTML = originalText;
+                }
+            } catch (error) {
+                alert(`Error unsubscribing from ${senderDomain}: ${error.message}`);
+                // Re-enable the button
+                button.disabled = false;
+                button.innerHTML = originalText;
+            }
+        }
+
+        async function skipSender(senderDomain, senderName) {
+            if (!confirm(`Skip emails from ${senderName} (${senderDomain})? They won't appear in future scans.`)) {
+                return;
+            }
+
+            // Find the button that was clicked and disable it during the request
+            const button = event.target;
+            const originalText = button.innerHTML;
+            button.disabled = true;
+            button.innerHTML = '⏳ Skipping...';
+
+            try {
+                const response = await fetch('/api/emails/skip', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        senderDomain, 
+                        senderName,
+                        reason: 'User skipped via UI' 
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    alert(`Successfully skipped ${senderName}! These emails won't appear in future scans.`);
+                    
+                    // Remove the email group from the UI
+                    const groupElement = button.closest('.email-group');
+                    if (groupElement) {
+                        groupElement.style.transition = 'opacity 0.3s ease-out';
+                        groupElement.style.opacity = '0';
+                        setTimeout(() => {
+                            groupElement.remove();
+                            // Update the counter if no groups remain
+                            const remainingGroups = document.querySelectorAll('.email-group');
+                            if (remainingGroups.length === 0) {
+                                document.getElementById('emailList').innerHTML = 
+                                    '<div class="status success">🎉 No more junk emails found! All remaining senders have been processed.</div>';
+                            }
+                        }, 300);
+                    }
+                } else {
+                    alert(`Failed to skip ${senderName}: ${data.error || 'Unknown error'}`);
+                    // Re-enable the button
+                    button.disabled = false;
+                    button.innerHTML = originalText;
+                }
+            } catch (error) {
+                alert(`Error skipping ${senderName}: ${error.message}`);
+                // Re-enable the button
+                button.disabled = false;
+                button.innerHTML = originalText;
+            }
+        }
+
+        function showStatus(elementId, message, type) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = `<div class="status ${type}">${message}</div>`;
+        }
+
+        function showProgress(elementId, message, percent, total) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = `
+                <div class="progress-container">
+                    <div class="progress-message">${message}</div>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" style="width: ${percent}%"></div>
+                    </div>
+                    <div class="progress-text">${percent}% ${total > 0 ? `(${total} emails)` : ''}</div>
+                </div>
+            `;
+        }
+
+        function showLoading(elementId) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = `
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>Processing...</p>
+                </div>
+            `;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Check for OAuth callback results
+        function checkAuthStatus() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const authResult = urlParams.get('auth');
+            
+            if (authResult === 'success') {
+                isAuthenticated = true;
+                showStatus('authStatus', 'Successfully authenticated!', 'success');
+                document.getElementById('scanButton').disabled = false;
+                document.getElementById('step2').classList.add('active');
+                // Clean URL
+                window.history.replaceState({}, document.title, window.location.pathname);
+            } else if (authResult === 'error') {
+                showStatus('authStatus', 'Authentication failed. Please try again.', 'error');
+                // Clean URL
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
+        }
+
+        // Check authentication status on page load
+        window.addEventListener('DOMContentLoaded', checkAuthStatus);
+
+        async function toggleSkipList() {
+            const skipListSection = document.getElementById('skipListSection');
+            const toggleButton = document.getElementById('skipListToggle');
+            
+            if (skipListSection.style.display === 'none') {
+                // Show skip list
+                await loadSkippedSenders();
+                skipListSection.style.display = 'block';
+                toggleButton.innerText = 'Hide Skipped Senders';
+            } else {
+                // Hide skip list
+                skipListSection.style.display = 'none';
+                toggleButton.innerText = 'Show Skipped Senders';
+            }
+        }
+
+        async function loadSkippedSenders() {
+            try {
+                const response = await fetch('/api/emails/skip-list');
+                const data = await response.json();
+                
+                const skipList = document.getElementById('skipList');
+                
+                if (data.skippedSenders && data.skippedSenders.length > 0) {
+                    const html = data.skippedSenders.map(sender => `
+                        <div class="email-group">
+                            <div class="group-header">
+                                <div class="group-info">
+                                    <h4>${escapeHtml(sender.senderName)}</h4>
+                                    <div class="group-details">
+                                        <span class="domain">${escapeHtml(sender.domain)}</span>
+                                        <span class="confidence">Skipped ${new Date(sender.skippedAt).toLocaleDateString()}</span>
+                                    </div>
+                                </div>
+                                <div class="group-actions">
+                                    <button class="button" onclick="removeFromSkipList('${escapeHtml(sender.domain)}', '${escapeHtml(sender.senderName)}')">
+                                        ↩️ Restore
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('');
+                    skipList.innerHTML = html;
+                } else {
+                    skipList.innerHTML = '<div class="status info">No skipped senders yet.</div>';
+                }
+            } catch (error) {
+                document.getElementById('skipList').innerHTML = '<div class="status error">Failed to load skipped senders.</div>';
+            }
+        }
+
+        async function removeFromSkipList(senderDomain, senderName) {
+            if (!confirm(`Restore ${senderName}? They will appear in future scans again.`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/emails/skip', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ senderDomain })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    alert(`Successfully restored ${senderName}! They will appear in future scans.`);
+                    await loadSkippedSenders(); // Refresh the list
+                } else {
+                    alert(`Failed to restore ${senderName}: ${data.error || 'Unknown error'}`);
+                }
+            } catch (error) {
+                alert(`Error restoring ${senderName}: ${error.message}`);
+            }
+        }
+    </script>
+</body>
+</html>

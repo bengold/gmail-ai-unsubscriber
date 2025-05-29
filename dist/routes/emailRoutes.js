@@ -1,0 +1,13 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.emailRoutes = void 0;
+const express_1 = require("express");
+const emailController_1 = require("../controllers/emailController");
+const router = (0, express_1.Router)();
+exports.emailRoutes = router;
+const emailController = new emailController_1.EmailController();
+router.get('/auth-url', emailController.getAuthUrl.bind(emailController));
+router.post('/authenticate', emailController.authenticate.bind(emailController));
+router.get('/scan', emailController.scanJunkEmails.bind(emailController));
+router.get('/progress', emailController.getProgress.bind(emailController));
+router.post('/unsubscribe', emailController.unsubscribeFromSender.bind(emailController));
