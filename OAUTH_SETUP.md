@@ -1,53 +1,107 @@
 # Google OAuth Setup Guide
 
-## 🚨 IMPORTANT: You need to update your Google Cloud Console settings
+## � Setting Up Google OAuth for Gmail AI Unsubscriber
 
-The "Access blocked: Authorization Error" occurs because the redirect URI in your Google Cloud Console doesn't match what the application expects.
+This guide will help you configure Google OAuth credentials to allow the application to access your Gmail account securely.
 
-## Steps to Fix:
+## Prerequisites
+- A Google account
+- Access to [Google Cloud Console](https://console.cloud.google.com/)
 
-### 1. Go to Google Cloud Console
-- Open [Google Cloud Console](https://console.cloud.google.com/)
-- Select your project or create a new one
+## Step-by-Step Setup
 
-### 2. Enable Gmail API
-- Go to "APIs & Services" > "Library"
+### 1. Create or Select a Google Cloud Project
+- Go to [Google Cloud Console](https://console.cloud.google.com/)
+- Click on the project dropdown at the top
+- Either select an existing project or click "New Project"
+- If creating new: give it a name like "Gmail AI Unsubscriber"
+
+### 2. Enable the Gmail API
+- In the Google Cloud Console, go to "APIs & Services" → "Library"
 - Search for "Gmail API"
-- Click "Enable" if not already enabled
+- Click on "Gmail API" in the results
+- Click "Enable" button
 
 ### 3. Configure OAuth Consent Screen
-- Go to "APIs & Services" > "OAuth consent screen"
-- Choose "External" user type
-- Fill in required fields:
-  - App name: "Gmail AI Unsubscriber"
-  - User support email: your email
-  - Developer contact: your email
-- Add scopes:
+- Go to "APIs & Services" → "OAuth consent screen"
+- Choose "External" user type (unless you have a Google Workspace account)
+- Fill in the required information:
+  - **App name**: "Gmail AI Unsubscriber"
+  - **User support email**: Your email address
+  - **App logo**: (optional)
+  - **App domain**: Leave blank for local development
+  - **Developer contact information**: Your email address
+- Click "Save and Continue"
+
+#### Add Required Scopes
+- In the "Scopes" section, click "Add or Remove Scopes"
+- Add these scopes:
   - `https://www.googleapis.com/auth/gmail.readonly`
   - `https://www.googleapis.com/auth/gmail.modify`
+- Click "Update" then "Save and Continue"
 
-### 4. Create/Update OAuth Credentials
-- Go to "APIs & Services" > "Credentials"
-- If you already have OAuth credentials, click "Edit"
-- If not, click "Create Credentials" > "OAuth 2.0 Client ID"
+#### Test Users (Development Phase)
+- Add your Gmail address as a test user
+- Click "Save and Continue"
+
+### 4. Create OAuth 2.0 Credentials
+- Go to "APIs & Services" → "Credentials"
+- Click "Create Credentials" → "OAuth 2.0 Client ID"
 - Choose "Web application"
-- Add Authorized redirect URIs:
-  ```
-  http://localhost:3000/api/auth/callback
-  ```
+- Configure the details:
+  - **Name**: "Gmail AI Unsubscriber Client"
+  - **Authorized JavaScript origins**: `http://localhost:3000`
+  - **Authorized redirect URIs**: `http://localhost:3000/auth/callback`
+- Click "Create"
 
-### 5. Update Your Credentials
-Your current .env file has:
+### 5. Download Credentials
+- After creating, you'll see a dialog with your client credentials
+- Click "Download JSON"
+- Save this file as `gmail-credentials.json` in your project's `credentials/` directory
+
+The downloaded file should look like this:
+```json
+{
+  "web": {
+    "client_id": "your-client-id.googleusercontent.com",
+    "client_secret": "your-client-secret",
+    "redirect_uris": ["http://localhost:3000/auth/callback"],
+    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+    "token_uri": "https://oauth2.googleapis.com/token"
+  }
+}
 ```
-GMAIL_CLIENT_ID=827653448666-bpmhcq5gu0l6l17aaham515tidf259t1.apps.googleusercontent.com
-GMAIL_CLIENT_SECRET=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
-GMAIL_REDIRECT_URI=http://localhost:3000/api/auth/callback
-```
 
-Make sure these match your Google Cloud Console credentials.
+## 🔒 Security Notes
 
-## 🎯 What's Fixed:
-- ✅ Proper OAuth redirect flow (no more manual code entry)
+- **Never commit** your `gmail-credentials.json` file to version control
+- The application stores OAuth tokens in `credentials/tokens.json` (also ignored by git)
+- Tokens are automatically refreshed when needed
+- You can revoke access anytime in your [Google Account settings](https://myaccount.google.com/permissions)
+
+## ⚠️ Troubleshooting
+
+### "Access blocked: Authorization Error"
+- Verify your redirect URI is exactly: `http://localhost:3000/auth/callback`
+- Make sure you're using the correct port (3000 by default)
+- Check that your OAuth consent screen is properly configured
+
+### "This app isn't verified"
+- This is normal for development apps with External user type
+- Click "Advanced" → "Go to Gmail AI Unsubscriber (unsafe)"
+- This warning appears because the app isn't published to all users
+
+### "The OAuth client was not found"
+- Double-check your `gmail-credentials.json` file is in the correct location
+- Verify the client ID and secret match your Google Cloud Console
+
+## 🚀 Ready to Go!
+
+Once you've completed these steps:
+1. Make sure your `credentials/gmail-credentials.json` file is in place
+2. Your `.env` file contains your OpenAI API key
+3. Run `npm start` and navigate to `http://localhost:3000`
+4. Click "Authenticate with Gmail" to complete the OAuth flow
 - ✅ Automatic authentication handling
 - ✅ Clean URL after authentication
 - ✅ Better user experience
