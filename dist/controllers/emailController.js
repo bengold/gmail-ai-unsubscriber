@@ -82,22 +82,19 @@ class EmailController {
             }
             const emails = await this.gmailService.getSubscriptionEmails();
             console.log(`📧 Found ${emails.length} potential subscription emails`);
-            // Process emails with preprocessing and progress tracking
-            const emailsToProcess = emails.slice(0, Math.min(emails.length, 100));
-            const totalEmails = emailsToProcess.length;
-            // Update progress with actual totals
+            // Update progress with initial totals
             this.currentProgress = {
                 ...this.currentProgress,
                 status: 'preprocessing',
-                total: totalEmails
+                total: emails.length
             };
-            console.log(`🔍 Preprocessing ${totalEmails} emails...`);
+            console.log(`🔍 Checking cache and preprocessing ${emails.length} emails...`);
             // Step 1: Check cache and preprocess emails
             const preprocessResults = [];
-            const needsAI = [];
+            const needsProcessing = [];
             let cacheHits = 0;
-            for (let i = 0; i < emailsToProcess.length; i++) {
-                const email = emailsToProcess[i];
+            for (let i = 0; i < emails.length; i++) {
+                const email = emails[i];
                 // Check cache first
                 const cachedAnalysis = emailCache_1.EmailCache.getCachedAnalysis(email);
                 if (cachedAnalysis) {
@@ -112,11 +109,25 @@ class EmailController {
                     this.currentProgress.preprocessed = i + 1;
                     continue;
                 }
+                // Not in cache, add to processing queue
+                needsProcessing.push({ email, index: i });
+                this.currentProgress.preprocessed = i + 1;
+            }
+            console.log(`📋 Cache check complete: ${cacheHits} from cache, ${needsProcessing.length} need processing`);
+            // Now limit only the emails that need processing (not cached ones)
+            const maxNewEmails = 100;
+            const emailsToProcess = needsProcessing.slice(0, Math.min(needsProcessing.length, maxNewEmails));
+            if (needsProcessing.length > maxNewEmails) {
+                console.log(`⚠️ Limited processing to ${maxNewEmails} new emails (${needsProcessing.length - maxNewEmails} skipped this time)`);
+            }
+            console.log(`🔄 Processing ${emailsToProcess.length} new emails (${cacheHits} already cached)`);
+            // Step 2: Process uncached emails with preprocessing and AI
+            const needsAI = [];
+            for (const { email, index } of emailsToProcess) {
                 // Not in cache, check if we can preprocess it
                 const preprocessResult = emailPreprocessor_1.EmailPreprocessor.preprocess(email);
-                this.currentProgress.preprocessed = i + 1;
                 if (preprocessResult.needsAI) {
-                    needsAI.push({ email, index: i });
+                    needsAI.push({ email, index });
                 }
                 else {
                     // Email classified by preprocessing
@@ -231,7 +242,7 @@ class EmailController {
             this.currentProgress = {
                 ...this.currentProgress,
                 status: 'complete',
-                processed: totalEmails,
+                processed: analyzed.length,
                 endTime: Date.now()
             };
             console.log(`✅ Scan complete: ${analyzed.length} initially processed, ${expandedEmails.size} total emails found from junk senders`);
