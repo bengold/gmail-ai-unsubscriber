@@ -174,6 +174,38 @@ export class GmailService {
     return uniqueEmails;
   }
 
+  async getAllEmailsFromSender(senderEmail: string): Promise<any[]> {
+    try {
+      console.log(`🔍 Searching for ALL emails from ${senderEmail}...`);
+      
+      // Search for emails from this sender (not limited to inbox)
+      const query = `from:${senderEmail}`;
+      const emails = await this.searchEmails(query, 500); // Higher limit for complete collection
+      
+      console.log(`📧 Found ${emails.length} total emails from ${senderEmail}`);
+      return emails;
+    } catch (error) {
+      console.error(`Error getting all emails from ${senderEmail}:`, error);
+      return [];
+    }
+  }
+
+  async getAllEmailsFromDomain(domain: string): Promise<any[]> {
+    try {
+      console.log(`🔍 Searching for ALL emails from domain ${domain}...`);
+      
+      // Search for emails from this domain
+      const query = `from:@${domain}`;
+      const emails = await this.searchEmails(query, 500); // Higher limit for complete collection
+      
+      console.log(`📧 Found ${emails.length} total emails from domain ${domain}`);
+      return emails;
+    } catch (error) {
+      console.error(`Error getting all emails from domain ${domain}:`, error);
+      return [];
+    }
+  }
+
   async markAsRead(messageId: string): Promise<void> {
     await this.gmail.users.messages.modify({
       userId: 'me',

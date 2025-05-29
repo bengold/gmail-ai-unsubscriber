@@ -180,6 +180,34 @@ class GmailService {
         const uniqueEmails = allEmails.filter((email, index, self) => index === self.findIndex(e => e.id === email.id));
         return uniqueEmails;
     }
+    async getAllEmailsFromSender(senderEmail) {
+        try {
+            console.log(`🔍 Searching for ALL emails from ${senderEmail}...`);
+            // Search for emails from this sender (not limited to inbox)
+            const query = `from:${senderEmail}`;
+            const emails = await this.searchEmails(query, 500); // Higher limit for complete collection
+            console.log(`📧 Found ${emails.length} total emails from ${senderEmail}`);
+            return emails;
+        }
+        catch (error) {
+            console.error(`Error getting all emails from ${senderEmail}:`, error);
+            return [];
+        }
+    }
+    async getAllEmailsFromDomain(domain) {
+        try {
+            console.log(`🔍 Searching for ALL emails from domain ${domain}...`);
+            // Search for emails from this domain
+            const query = `from:@${domain}`;
+            const emails = await this.searchEmails(query, 500); // Higher limit for complete collection
+            console.log(`📧 Found ${emails.length} total emails from domain ${domain}`);
+            return emails;
+        }
+        catch (error) {
+            console.error(`Error getting all emails from domain ${domain}:`, error);
+            return [];
+        }
+    }
     async markAsRead(messageId) {
         await this.gmail.users.messages.modify({
             userId: 'me',

@@ -186,8 +186,47 @@ class EmailController {
             // Combine preprocessed and AI-analyzed results
             const analyzed = [...preprocessResults, ...aiAnalyzed];
             const junkEmails = analyzed.filter(email => email.analysis.isJunk);
-            // Group emails by sender domain for better organization
-            const groupedEmails = this.groupEmailsBySender(junkEmails);
+            console.log(`🔍 Found ${junkEmails.length} junk emails, expanding to find ALL emails from these senders...`);
+            // For each junk sender, gather ALL their emails
+            this.currentProgress.status = 'expanding';
+            const expandedEmails = new Map();
+            const processedDomains = new Set();
+            for (let i = 0; i < junkEmails.length; i++) {
+                const email = junkEmails[i];
+                const domain = this.extractDomain(email.from);
+                // Skip if we already processed this domain
+                if (processedDomains.has(domain)) {
+                    continue;
+                }
+                processedDomains.add(domain);
+                console.log(`📧 Expanding emails from domain: ${domain}`);
+                try {
+                    // Get ALL emails from this domain
+                    const allEmailsFromDomain = await this.gmailService.getAllEmailsFromDomain(domain);
+                    // Process each email with basic info
+                    for (const fullEmail of allEmailsFromDomain) {
+                        const emailData = {
+                            id: fullEmail.id,
+                            from: this.getHeader(fullEmail, 'From'),
+                            subject: this.getHeader(fullEmail, 'Subject'),
+                            analysis: {
+                                isJunk: true, // We know this sender is junk
+                                confidence: 0.9, // High confidence since we found junk from this sender
+                                category: 'marketing',
+                                reasoning: 'Expanded from confirmed junk sender'
+                            },
+                            unsubscribeInfo: await this.unsubscribeService.findUnsubscribeMethod(fullEmail)
+                        };
+                        expandedEmails.set(fullEmail.id, emailData);
+                    }
+                }
+                catch (error) {
+                    console.error(`Error expanding emails from ${domain}:`, error);
+                }
+            }
+            console.log(`📈 Expanded to ${expandedEmails.size} total emails from junk senders`);
+            // Group the expanded emails by sender domain
+            const groupedEmails = this.groupEmailsBySender(Array.from(expandedEmails.values()));
             // Update progress to complete
             this.currentProgress = {
                 ...this.currentProgress,
@@ -195,16 +234,18 @@ class EmailController {
                 processed: totalEmails,
                 endTime: Date.now()
             };
-            console.log(`✅ Scan complete: ${analyzed.length} processed, ${junkEmails.length} junk emails found`);
+            console.log(`✅ Scan complete: ${analyzed.length} initially processed, ${expandedEmails.size} total emails found from junk senders`);
             console.log(`📊 Stats: ${preprocessResults.length} preprocessed, ${this.currentProgress.aiCalls} AI calls made`);
             res.json({
                 total: emails.length,
                 processed: analyzed.length,
                 junkEmails: junkEmails.length,
+                expandedEmails: expandedEmails.size,
                 groups: groupedEmails,
                 stats: {
                     preprocessed: preprocessResults.length,
                     aiAnalyzed: aiAnalyzed.length,
+                    expandedTotal: expandedEmails.size,
                     totalAICalls: this.currentProgress.aiCalls,
                     processingTime: this.currentProgress.endTime - this.currentProgress.startTime
                 }

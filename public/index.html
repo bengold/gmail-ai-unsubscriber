@@ -333,19 +333,6 @@
                 <h3>Step 3: Review found emails</h3>
                 <div id="emailList"></div>
             </div>
-
-            <!-- Skipped Senders Management -->
-            <div class="step" id="skipListSection" style="display: none;">
-                <h3>Skipped Senders</h3>
-                <p>These senders won't appear in future scans. Click to remove from skip list.</p>
-                <div id="skipList"></div>
-                <button class="button secondary" onclick="toggleSkipList()">Hide Skipped Senders</button>
-            </div>
-        </div>
-
-        <!-- Show/hide skip list button -->
-        <div style="text-align: center; margin-top: 20px;">
-            <button class="button secondary" onclick="toggleSkipList()" id="skipListToggle">Show Skipped Senders</button>
         </div>
     </div>
 
@@ -564,7 +551,7 @@
         }
 
         async function skipSender(senderDomain, senderName) {
-            if (!confirm(`Skip emails from ${senderName} (${senderDomain})? They won't appear in future scans.`)) {
+            if (!confirm(`Are you sure you want to skip emails from ${senderName} (${senderDomain})?\n\nThis will hide all future emails from this sender.`)) {
                 return;
             }
 
@@ -581,14 +568,14 @@
                     body: JSON.stringify({ 
                         senderDomain, 
                         senderName,
-                        reason: 'User skipped via UI' 
+                        reason: 'User skipped during scan'
                     })
                 });
 
                 const data = await response.json();
 
                 if (response.ok && data.success) {
-                    alert(`Successfully skipped ${senderName}! These emails won't appear in future scans.`);
+                    alert(`Successfully added ${senderDomain} to skip list!\n\nThese emails will not appear in future scans.`);
                     
                     // Remove the email group from the UI
                     const groupElement = button.closest('.email-group');
@@ -601,18 +588,18 @@
                             const remainingGroups = document.querySelectorAll('.email-group');
                             if (remainingGroups.length === 0) {
                                 document.getElementById('emailList').innerHTML = 
-                                    '<div class="status success">🎉 No more junk emails found! All remaining senders have been processed.</div>';
+                                    '<div class="status success">🎉 No more junk emails found! All senders processed.</div>';
                             }
                         }, 300);
                     }
                 } else {
-                    alert(`Failed to skip ${senderName}: ${data.error || 'Unknown error'}`);
+                    alert(`Failed to skip ${senderDomain}\n\n${data.message || data.error || 'Unknown error'}`);
                     // Re-enable the button
                     button.disabled = false;
                     button.innerHTML = originalText;
                 }
             } catch (error) {
-                alert(`Error skipping ${senderName}: ${error.message}`);
+                alert(`Error skipping ${senderDomain}: ${error.message}`);
                 // Re-enable the button
                 button.disabled = false;
                 button.innerHTML = originalText;
@@ -674,82 +661,6 @@
 
         // Check authentication status on page load
         window.addEventListener('DOMContentLoaded', checkAuthStatus);
-
-        async function toggleSkipList() {
-            const skipListSection = document.getElementById('skipListSection');
-            const toggleButton = document.getElementById('skipListToggle');
-            
-            if (skipListSection.style.display === 'none') {
-                // Show skip list
-                await loadSkippedSenders();
-                skipListSection.style.display = 'block';
-                toggleButton.innerText = 'Hide Skipped Senders';
-            } else {
-                // Hide skip list
-                skipListSection.style.display = 'none';
-                toggleButton.innerText = 'Show Skipped Senders';
-            }
-        }
-
-        async function loadSkippedSenders() {
-            try {
-                const response = await fetch('/api/emails/skip-list');
-                const data = await response.json();
-                
-                const skipList = document.getElementById('skipList');
-                
-                if (data.skippedSenders && data.skippedSenders.length > 0) {
-                    const html = data.skippedSenders.map(sender => `
-                        <div class="email-group">
-                            <div class="group-header">
-                                <div class="group-info">
-                                    <h4>${escapeHtml(sender.senderName)}</h4>
-                                    <div class="group-details">
-                                        <span class="domain">${escapeHtml(sender.domain)}</span>
-                                        <span class="confidence">Skipped ${new Date(sender.skippedAt).toLocaleDateString()}</span>
-                                    </div>
-                                </div>
-                                <div class="group-actions">
-                                    <button class="button" onclick="removeFromSkipList('${escapeHtml(sender.domain)}', '${escapeHtml(sender.senderName)}')">
-                                        ↩️ Restore
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    `).join('');
-                    skipList.innerHTML = html;
-                } else {
-                    skipList.innerHTML = '<div class="status info">No skipped senders yet.</div>';
-                }
-            } catch (error) {
-                document.getElementById('skipList').innerHTML = '<div class="status error">Failed to load skipped senders.</div>';
-            }
-        }
-
-        async function removeFromSkipList(senderDomain, senderName) {
-            if (!confirm(`Restore ${senderName}? They will appear in future scans again.`)) {
-                return;
-            }
-
-            try {
-                const response = await fetch('/api/emails/skip', {
-                    method: 'DELETE',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ senderDomain })
-                });
-
-                const data = await response.json();
-
-                if (response.ok && data.success) {
-                    alert(`Successfully restored ${senderName}! They will appear in future scans.`);
-                    await loadSkippedSenders(); // Refresh the list
-                } else {
-                    alert(`Failed to restore ${senderName}: ${data.error || 'Unknown error'}`);
-                }
-            } catch (error) {
-                alert(`Error restoring ${senderName}: ${error.message}`);
-            }
-        }
     </script>
 </body>
 </html>
