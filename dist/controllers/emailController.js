@@ -6,6 +6,7 @@ const aiService_1 = require("../services/aiService");
 const unsubscribeService_1 = require("../services/unsubscribeService");
 const emailPreprocessor_1 = require("../utils/emailPreprocessor");
 const emailCache_1 = require("../utils/emailCache");
+const skipList_1 = require("../utils/skipList");
 class EmailController {
     constructor() {
         this.currentProgress = null;
@@ -260,6 +261,55 @@ class EmailController {
             res.status(500).json({ error: 'Failed to process unsubscribe request' });
         }
     }
+    async skipSender(req, res) {
+        try {
+            const { senderDomain, senderName, reason } = req.body;
+            if (!senderDomain) {
+                res.status(400).json({ error: 'Sender domain is required' });
+                return;
+            }
+            // Add to skip list
+            skipList_1.SkipList.addToSkipList(senderDomain, senderName || senderDomain, reason);
+            res.json({
+                success: true,
+                message: `${senderDomain} added to skip list`,
+                senderDomain
+            });
+        }
+        catch (error) {
+            console.error('Error skipping sender:', error);
+            res.status(500).json({ error: 'Failed to skip sender' });
+        }
+    }
+    async getSkippedSenders(req, res) {
+        try {
+            const skippedSenders = skipList_1.SkipList.getSkippedSenders();
+            res.json({ skippedSenders });
+        }
+        catch (error) {
+            console.error('Error getting skipped senders:', error);
+            res.status(500).json({ error: 'Failed to get skipped senders' });
+        }
+    }
+    async removeFromSkipList(req, res) {
+        try {
+            const { senderDomain } = req.body;
+            if (!senderDomain) {
+                res.status(400).json({ error: 'Sender domain is required' });
+                return;
+            }
+            skipList_1.SkipList.removeFromSkipList(senderDomain);
+            res.json({
+                success: true,
+                message: `${senderDomain} removed from skip list`,
+                senderDomain
+            });
+        }
+        catch (error) {
+            console.error('Error removing from skip list:', error);
+            res.status(500).json({ error: 'Failed to remove from skip list' });
+        }
+    }
     getHeader(email, headerName) {
         const header = email.payload.headers.find((h) => h.name === headerName);
         return header ? header.value : '';
@@ -270,6 +320,11 @@ class EmailController {
             const fromHeader = email.from || '';
             const domain = this.extractDomain(fromHeader);
             const senderName = this.extractSenderName(fromHeader);
+            // Skip emails from senders in the skip list
+            if (skipList_1.SkipList.isSkipped(domain)) {
+                console.log(`⏭️ Skipping emails from ${domain} (in skip list)`);
+                return;
+            }
             if (!groups.has(domain)) {
                 groups.set(domain, {
                     domain,

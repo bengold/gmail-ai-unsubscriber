@@ -165,11 +165,11 @@ class GmailService {
     }
     async getSubscriptionEmails() {
         const queries = [
-            'unsubscribe',
-            'from:noreply',
-            'from:newsletter',
-            'subject:newsletter',
-            'subject:promotional'
+            'in:inbox unsubscribe',
+            'in:inbox from:noreply',
+            'in:inbox from:newsletter',
+            'in:inbox subject:newsletter',
+            'in:inbox subject:promotional'
         ];
         const allEmails = [];
         for (const query of queries) {

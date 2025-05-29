@@ -11,3 +11,6 @@ router.post('/authenticate', emailController.authenticate.bind(emailController))
 router.get('/scan', emailController.scanJunkEmails.bind(emailController));
 router.get('/progress', emailController.getProgress.bind(emailController));
 router.post('/unsubscribe', emailController.unsubscribeFromSender.bind(emailController));
+router.post('/skip', emailController.skipSender.bind(emailController));
+router.get('/skip-list', emailController.getSkippedSenders.bind(emailController));
+router.delete('/skip', emailController.removeFromSkipList.bind(emailController));
