@@ -135,3 +135,39 @@ export class EmailCache {
     }
   }
 }
+
+export class EmailMetadataCache {
+  private static cache = new Map<string, any>();
+  private static cacheDuration = 5 * 60 * 1000; // 5 minutes
+  
+  static getCachedMetadata(emailId: string): any | null {
+    const cached = this.cache.get(emailId);
+    if (cached && Date.now() - cached.timestamp < this.cacheDuration) {
+      return cached.data;
+    }
+    return null;
+  }
+  
+  static cacheMetadata(emailId: string, metadata: any): void {
+    this.cache.set(emailId, {
+      data: metadata,
+      timestamp: Date.now()
+    });
+  }
+  
+  static clearExpiredCache(): void {
+    const now = Date.now();
+    for (const [key, value] of this.cache.entries()) {
+      if (now - value.timestamp >= this.cacheDuration) {
+        this.cache.delete(key);
+      }
+    }
+  }
+  
+  static getCacheStats() {
+    return {
+      size: this.cache.size,
+      items: Array.from(this.cache.keys())
+    };
+  }
+}

@@ -173,6 +173,111 @@ export class GmailService {
     }
   }
 
+  async searchEmailsBatch(queries: string[], maxResults: number = 100): Promise<any[]> {
+    try {
+      // Use batch requests to fetch multiple queries simultaneously
+      const allEmails: any[] = [];
+      
+      // Process queries in batches to avoid overwhelming the API
+      const batchSize = 3;
+      for (let i = 0; i < queries.length; i += batchSize) {
+        const batch = queries.slice(i, i + batchSize);
+        
+        const batchPromises = batch.map(async (query) => {
+          try {
+            const response = await this.gmail.users.messages.list({
+              userId: 'me',
+              q: query,
+              maxResults,
+            });
+            return response.data.messages || [];
+          } catch (error) {
+            console.error(`Error with query "${query}":`, error);
+            return [];
+          }
+        });
+        
+        const batchResults = await Promise.all(batchPromises);
+        const batchMessages = batchResults.flat();
+        
+        // Fetch email details in batch
+        if (batchMessages.length > 0) {
+          const emailBatch = await this.getEmailsBatch(batchMessages.map(m => m.id));
+          allEmails.push(...emailBatch);
+        }
+        
+        // Small delay between batches
+        if (i + batchSize < queries.length) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      }
+
+      // Remove duplicates based on message ID
+      const uniqueEmails = allEmails.filter((email, index, self) =>
+        index === self.findIndex(e => e.id === email.id)
+      );
+
+      return uniqueEmails;
+    } catch (error) {
+      console.error('Error in batch search:', error);
+      throw error;
+    }
+  }
+
+  async getEmailsBatch(messageIds: string[]): Promise<any[]> {
+    try {
+      const emails: any[] = [];
+      
+      // Process in smaller batches to avoid rate limits
+      const batchSize = 10;
+      for (let i = 0; i < messageIds.length; i += batchSize) {
+        const batch = messageIds.slice(i, i + batchSize);
+        
+        const batchPromises = batch.map(async (messageId) => {
+          try {
+            const email = await this.gmail.users.messages.get({
+              userId: 'me',
+              id: messageId,
+              format: 'full',
+            });
+            return email.data;
+          } catch (error: any) {
+            if (error.status === 429 || error.status === 403) {
+              await new Promise(resolve => setTimeout(resolve, 1000));
+              // Retry once
+              try {
+                const email = await this.gmail.users.messages.get({
+                  userId: 'me',
+                  id: messageId,
+                  format: 'full',
+                });
+                return email.data;
+              } catch (retryError) {
+                console.error(`Failed to get email ${messageId} after retry:`, retryError);
+                return null;
+              }
+            } else {
+              console.error(`Error getting email ${messageId}:`, error);
+              return null;
+            }
+          }
+        });
+        
+        const batchResults = await Promise.all(batchPromises);
+        const validEmails = batchResults.filter(email => email !== null);
+        emails.push(...validEmails);
+        
+        // Reduced delay for batch processing
+        await new Promise(resolve => setTimeout(resolve, 15));
+      }
+      
+      return emails;
+    } catch (error) {
+      console.error('Error in batch email fetch:', error);
+      throw error;
+    }
+  }
+
   async getSubscriptionEmails(): Promise<any[]> {
     const queries = [
       'in:inbox unsubscribe',
