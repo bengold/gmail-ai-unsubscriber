@@ -317,8 +317,11 @@
             <!-- Step 1: Authentication -->
             <div class="step active" id="step1">
                 <h3>Step 1: Connect your Gmail account</h3>
-                <div id="authStatus"></div>
+                <div id="authStatus">Checking authentication status...</div>
                 <button class="button" onclick="authenticate()">Connect Gmail</button>
+                <div style="margin-top: 10px; font-size: 0.9rem; color: #6b7280;">
+                    <em>Note: Your credentials are stored securely and only used to access your Gmail.</em>
+                </div>
             </div>
 
             <!-- Step 2: Scan emails -->
@@ -340,12 +343,65 @@
         let junkEmails = [];
         let isAuthenticated = false;
 
+        // Check authentication status on page load
+        window.addEventListener('DOMContentLoaded', async () => {
+            await checkAuthenticationStatus();
+            
+            // Handle OAuth callback if code is present
+            const urlParams = new URLSearchParams(window.location.search);
+            const authStatus = urlParams.get('auth');
+            
+            if (authStatus === 'success') {
+                showStatus('authStatus', 'Gmail connected successfully!', 'success');
+                await checkAuthenticationStatus(); // Refresh auth status
+            } else if (authStatus === 'error') {
+                showStatus('authStatus', 'Authentication failed. Please try again.', 'error');
+            }
+        });
+
+        async function checkAuthenticationStatus() {
+            try {
+                const response = await fetch('/api/emails/auth-status');
+                const data = await response.json();
+                
+                if (data.isAuthenticated) {
+                    isAuthenticated = true;
+                    showStatus('authStatus', data.message, 'success');
+                    
+                    // Hide the connect button and show as completed
+                    const connectButton = document.querySelector('#step1 .button');
+                    connectButton.style.display = 'none';
+                    
+                    // Add a connected indicator
+                    const authStatus = document.getElementById('authStatus');
+                    authStatus.innerHTML += '<br><span style="color: #10b981; font-weight: bold;">✓ Connected</span>';
+                    
+                    // Enable step 2
+                    document.getElementById('step2').classList.add('active');
+                    document.getElementById('scanButton').disabled = false;
+                    
+                    // Show step 1 as completed
+                    document.getElementById('step1').style.opacity = '0.7';
+                    document.getElementById('step1').style.borderColor = '#10b981';
+                } else {
+                    isAuthenticated = false;
+                    showStatus('authStatus', data.message, 'info');
+                }
+            } catch (error) {
+                console.error('Failed to check authentication status:', error);
+                showStatus('authStatus', 'Unable to check authentication status', 'error');
+            }
+        }
+
         async function authenticate() {
             try {
                 const response = await fetch('/api/emails/auth-url');
                 const data = await response.json();
                 
                 if (data.authUrl) {
+                    // Show loading state
+                    showStatus('authStatus', 'Redirecting to Google for authentication...', 'info');
+                    
                     // Redirect to Google OAuth instead of opening popup
                     window.location.href = data.authUrl;
                 }
@@ -386,6 +442,13 @@
                                 ? Math.round((progress.processed / progress.total) * 100)
                                 : 0;
                             showProgress('scanStatus', progressText, progressPercent, progress.total);
+                            
+                        } else if (progress.status === 'expanding') {
+                            const progressText = `Expanding emails from junk senders... (${progress.expandingDomains || 0}/${progress.totalDomains || 0} domains, ${progress.expandedEmails || 0} emails found)`;
+                            const progressPercent = progress.totalDomains > 0 
+                                ? Math.round((progress.expandingDomains / progress.totalDomains) * 100)
+                                : 0;
+                            showProgress('scanStatus', progressText, progressPercent, progress.expandedEmails || 0);
                             
                         } else if (progress.status === 'starting') {
                             showProgress('scanStatus', 'Starting email scan...', 0, 0);
@@ -515,10 +578,27 @@
                 const data = await response.json();
 
                 if (response.ok && data.success) {
-                    // Show success message with archive status
+                    // Show success message with archive status and unsubscribe link
                     const archiveStatus = data.archived ? '\n📦 Emails archived successfully!' : '';
-                    const message = `Successfully unsubscribed from ${senderDomain}!\n\nMethod: ${data.method}\nAffected emails: ${data.emailCount}${archiveStatus}\n\n${data.details}`;
-                    alert(message);
+                    
+                    let message = `Successfully processed ${senderDomain}!\n\nMethod: ${data.method}\nAffected emails: ${data.emailCount}${archiveStatus}\n\n${data.details}`;
+                    
+                    // If there's an unsubscribe link, offer to open it
+                    if (data.method === 'link' && data.details && data.details.includes('http')) {
+                        const urlMatch = data.details.match(/https?:\/\/[^\s]+/);
+                        if (urlMatch) {
+                            const unsubscribeUrl = urlMatch[0];
+                            message += `\n\nWould you like to open the unsubscribe link now?`;
+                            
+                            if (confirm(message)) {
+                                window.open(unsubscribeUrl, '_blank');
+                            }
+                        } else {
+                            alert(message);
+                        }
+                    } else {
+                        alert(message);
+                    }
                     
                     // Remove the email group from the UI
                     const groupElement = button.closest('.email-group');

@@ -7,6 +7,7 @@ const router = (0, express_1.Router)();
 exports.emailRoutes = router;
 const emailController = new emailController_1.EmailController();
 router.get('/auth-url', emailController.getAuthUrl.bind(emailController));
+router.get('/auth-status', emailController.checkAuthStatus.bind(emailController));
 router.post('/authenticate', emailController.authenticate.bind(emailController));
 router.get('/scan', emailController.scanJunkEmails.bind(emailController));
 router.get('/progress', emailController.getProgress.bind(emailController));

@@ -177,7 +177,7 @@ export class EmailController {
       
       // Step 2: Process emails that need AI analysis in batches
       this.currentProgress.status = 'ai-analysis';
-      const batchSize = 5; // Smaller batches for AI analysis
+      const batchSize = 10; // Increased batch size for better throughput
       const aiAnalyzed = [];
       
       if (needsAI.length > 0) {
@@ -190,36 +190,43 @@ export class EmailController {
           this.currentProgress.currentBatch = batchNum;
           console.log(`🤖 AI analyzing batch ${batchNum}/${this.currentProgress.totalBatches} (${batch.length} emails)...`);
           
-          // Process emails in batch sequentially for better rate limiting
-          for (const { email, index } of batch) {
+          // Process emails in batch with parallel unsubscribe info fetching
+          const batchPromises = batch.map(async ({ email, index }) => {
             try {
-              const analysis = await this.aiService.analyzeEmail(email);
-              const unsubscribeInfo = await this.unsubscribeService.findUnsubscribeMethod(email);
+              const [analysis, unsubscribeInfo] = await Promise.all([
+                this.aiService.analyzeEmail(email),
+                this.unsubscribeService.findUnsubscribeMethod(email)
+              ]);
               
-              aiAnalyzed.push({
+              const result = {
                 id: email.id,
                 subject: this.getHeader(email, 'Subject'),
                 from: this.getHeader(email, 'From'),
                 analysis,
                 unsubscribeInfo
-              });
+              };
               
               // Cache the AI analysis result
               EmailCache.cacheAnalysis(email, analysis, unsubscribeInfo);
               
-              this.currentProgress.aiCalls++;
-              this.currentProgress.processed = preprocessResults.length + aiAnalyzed.length;
-              
+              return result;
             } catch (error) {
               console.error(`Error processing email ${email.id}:`, error);
-              // Continue with other emails even if one fails
+              return null;
             }
-          }
+          });
           
-          // Add delay between AI batches
+          const batchResults = await Promise.all(batchPromises);
+          const successfulResults = batchResults.filter(result => result !== null);
+          
+          aiAnalyzed.push(...successfulResults);
+          this.currentProgress.aiCalls += batch.length;
+          this.currentProgress.processed = preprocessResults.length + aiAnalyzed.length;
+          
+          // Add shorter delay between AI batches (faster processing)
           if (batchNum < this.currentProgress.totalBatches) {
-            console.log(`⏱️  Waiting 3 seconds before next AI batch...`);
-            await new Promise(resolve => setTimeout(resolve, 3000));
+            console.log(`⏱️  Waiting 1 second before next AI batch...`);
+            await new Promise(resolve => setTimeout(resolve, 1000));
           }
         }
       } else {
@@ -233,47 +240,73 @@ export class EmailController {
       
       console.log(`🔍 Found ${junkEmails.length} junk emails, expanding to find ALL emails from these senders...`);
       
-      // For each junk sender, gather ALL their emails
+      // For each junk sender, gather ALL their emails - now in parallel for speed
       this.currentProgress.status = 'expanding';
-      const expandedEmails = new Map();
-      const processedDomains = new Set();
+      this.currentProgress.expandingDomains = 0;
       
-      for (let i = 0; i < junkEmails.length; i++) {
-        const email = junkEmails[i];
-        const domain = this.extractDomain(email.from);
+      // Get unique domains to process
+      const domainsToProcess = [...new Set(junkEmails.map(email => this.extractDomain(email.from)))];
+      this.currentProgress.totalDomains = domainsToProcess.length;
+      
+      const expandedEmails = new Map();
+      
+      console.log(`🔍 Expanding emails from ${domainsToProcess.length} domains in parallel...`);
+      
+      // Process domains in parallel with controlled concurrency
+      const concurrency = 3; // Process 3 domains at a time
+      const results = [];
+      
+      for (let i = 0; i < domainsToProcess.length; i += concurrency) {
+        const batch = domainsToProcess.slice(i, i + concurrency);
         
-        // Skip if we already processed this domain
-        if (processedDomains.has(domain)) {
-          continue;
-        }
-        
-        processedDomains.add(domain);
-        console.log(`📧 Expanding emails from domain: ${domain}`);
-        
-        try {
-          // Get ALL emails from this domain
-          const allEmailsFromDomain = await this.gmailService.getAllEmailsFromDomain(domain);
+        const batchPromises = batch.map(async (domain) => {
+          console.log(`📧 Expanding emails from domain: ${domain}`);
           
-          // Process each email with basic info
-          for (const fullEmail of allEmailsFromDomain) {
-            const emailData = {
+          try {
+            const allEmailsFromDomain = await this.gmailService.getAllEmailsFromDomain(domain);
+            
+            // Get unsubscribe info from the first email of this domain (representative)
+            let sampleUnsubscribeInfo = null;
+            if (allEmailsFromDomain.length > 0) {
+              try {
+                sampleUnsubscribeInfo = await this.unsubscribeService.findUnsubscribeMethod(allEmailsFromDomain[0]);
+              } catch (error) {
+                console.error(`Error getting unsubscribe info for ${domain}:`, error);
+              }
+            }
+            
+            const domainEmails = allEmailsFromDomain.map(fullEmail => ({
               id: fullEmail.id,
               from: this.getHeader(fullEmail, 'From'),
               subject: this.getHeader(fullEmail, 'Subject'),
               analysis: {
-                isJunk: true, // We know this sender is junk
-                confidence: 0.9, // High confidence since we found junk from this sender
+                isJunk: true,
+                confidence: 0.9,
                 category: 'marketing',
                 reasoning: 'Expanded from confirmed junk sender'
               },
-              unsubscribeInfo: await this.unsubscribeService.findUnsubscribeMethod(fullEmail)
-            };
+              unsubscribeInfo: sampleUnsubscribeInfo // Use the sample for all emails from this domain
+            }));
             
-            expandedEmails.set(fullEmail.id, emailData);
+            return { domain, emails: domainEmails };
+          } catch (error) {
+            console.error(`Error expanding emails from ${domain}:`, error);
+            return { domain, emails: [] };
           }
-        } catch (error) {
-          console.error(`Error expanding emails from ${domain}:`, error);
+        });
+        
+        const batchResults = await Promise.all(batchPromises);
+        
+        // Add results to expandedEmails map
+        for (const { domain, emails } of batchResults) {
+          for (const emailData of emails) {
+            expandedEmails.set(emailData.id, emailData);
+          }
+          this.currentProgress.expandingDomains++;
+          this.currentProgress.expandedEmails = expandedEmails.size;
         }
+        
+        console.log(`✅ Processed ${this.currentProgress.expandingDomains}/${domainsToProcess.length} domains, found ${expandedEmails.size} emails total`);
       }
       
       console.log(`📈 Expanded to ${expandedEmails.size} total emails from junk senders`);
@@ -416,6 +449,22 @@ export class EmailController {
     }
   }
 
+  async checkAuthStatus(req: Request, res: Response): Promise<void> {
+    try {
+      const isAuthenticated = await this.gmailService.isAuthenticated();
+      res.json({ 
+        isAuthenticated,
+        message: isAuthenticated ? 'Gmail account already connected' : 'Gmail authentication required'
+      });
+    } catch (error) {
+      console.error('Error checking auth status:', error);
+      res.json({ 
+        isAuthenticated: false,
+        message: 'Gmail authentication required'
+      });
+    }
+  }
+
   private getHeader(email: any, headerName: string): string {
     const header = email.payload.headers.find((h: any) => h.name === headerName);
     return header ? header.value : '';
@@ -450,7 +499,7 @@ export class EmailController {
       group.count++;
       group.emails.push(email);
       group.totalConfidence += email.analysis.confidence || 0;
-      if (email.unsubscribeInfo && email.unsubscribeInfo.method !== 'none') {
+      if (email.unsubscribeInfo && email.unsubscribeInfo.hasUnsubscribeLink) {
         group.hasUnsubscribe = true;
       }
     });

@@ -5,6 +5,7 @@ const router = Router();
 const emailController = new EmailController();
 
 router.get('/auth-url', emailController.getAuthUrl.bind(emailController));
+router.get('/auth-status', emailController.checkAuthStatus.bind(emailController));
 router.post('/authenticate', emailController.authenticate.bind(emailController));
 router.get('/scan', emailController.scanJunkEmails.bind(emailController));
 router.get('/progress', emailController.getProgress.bind(emailController));

@@ -148,14 +148,41 @@ class GmailService {
             if (!response.data.messages) {
                 return [];
             }
-            const emails = await Promise.all(response.data.messages.map(async (message) => {
-                const email = await this.gmail.users.messages.get({
-                    userId: 'me',
-                    id: message.id,
-                    format: 'full',
-                });
-                return email.data;
-            }));
+            // Process emails sequentially to avoid rate limiting
+            const emails = [];
+            for (const message of response.data.messages) {
+                try {
+                    const email = await this.gmail.users.messages.get({
+                        userId: 'me',
+                        id: message.id,
+                        format: 'full',
+                    });
+                    emails.push(email.data);
+                    // Reduced delay for inbox-only searches (faster and less API load)
+                    await new Promise(resolve => setTimeout(resolve, 25));
+                }
+                catch (error) {
+                    if (error.status === 429 || error.status === 403) {
+                        console.log('⏱️ Rate limit hit, waiting 1 second...');
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                        // Retry the request
+                        try {
+                            const email = await this.gmail.users.messages.get({
+                                userId: 'me',
+                                id: message.id,
+                                format: 'full',
+                            });
+                            emails.push(email.data);
+                        }
+                        catch (retryError) {
+                            console.error(`Failed to get email ${message.id} after retry:`, retryError);
+                        }
+                    }
+                    else {
+                        console.error(`Error getting email ${message.id}:`, error);
+                    }
+                }
+            }
             return emails;
         }
         catch (error) {
@@ -182,29 +209,29 @@ class GmailService {
     }
     async getAllEmailsFromSender(senderEmail) {
         try {
-            console.log(`🔍 Searching for ALL emails from ${senderEmail}...`);
-            // Search for emails from this sender (not limited to inbox)
-            const query = `from:${senderEmail}`;
+            console.log(`🔍 Searching for inbox emails from ${senderEmail}...`);
+            // Search for emails from this sender in inbox only (faster and more relevant)
+            const query = `in:inbox from:${senderEmail}`;
             const emails = await this.searchEmails(query, 500); // Higher limit for complete collection
-            console.log(`📧 Found ${emails.length} total emails from ${senderEmail}`);
+            console.log(`📧 Found ${emails.length} inbox emails from ${senderEmail}`);
             return emails;
         }
         catch (error) {
-            console.error(`Error getting all emails from ${senderEmail}:`, error);
+            console.error(`Error getting emails from ${senderEmail}:`, error);
             return [];
         }
     }
     async getAllEmailsFromDomain(domain) {
         try {
-            console.log(`🔍 Searching for ALL emails from domain ${domain}...`);
-            // Search for emails from this domain
-            const query = `from:@${domain}`;
+            console.log(`🔍 Searching for inbox emails from domain ${domain}...`);
+            // Search for emails from this domain in inbox only (faster and more relevant)
+            const query = `in:inbox from:@${domain}`;
             const emails = await this.searchEmails(query, 500); // Higher limit for complete collection
-            console.log(`📧 Found ${emails.length} total emails from domain ${domain}`);
+            console.log(`📧 Found ${emails.length} inbox emails from domain ${domain}`);
             return emails;
         }
         catch (error) {
-            console.error(`Error getting all emails from domain ${domain}:`, error);
+            console.error(`Error getting emails from domain ${domain}:`, error);
             return [];
         }
     }
@@ -240,6 +267,23 @@ class GmailService {
             userId: 'me',
             id: messageId
         });
+    }
+    async isAuthenticated() {
+        return await this.loadSavedTokens();
+    }
+    async getEmail(messageId) {
+        try {
+            const email = await this.gmail.users.messages.get({
+                userId: 'me',
+                id: messageId,
+                format: 'full',
+            });
+            return email.data;
+        }
+        catch (error) {
+            console.error(`Error getting email ${messageId}:`, error);
+            throw error;
+        }
     }
 }
 exports.GmailService = GmailService;
