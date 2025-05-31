@@ -1,746 +1,414 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="h-full">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gmail AI Unsubscriber</title>
+    <title>Gmail AI Unsubscriber - Smart Email Management</title>
+    <meta name="description" content="Intelligently unsubscribe from unwanted emails using AI-powered analysis">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- System Dark Mode Detection -->
+    <script>
+        // Detect system preference and apply dark mode accordingly
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+        
+        // Listen for changes in system preference
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+            if (e.matches) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        });
+    </script>
+    
+    <!-- Custom Tailwind Config -->
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#eff6ff',
+                            100: '#dbeafe',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                            900: '#1e3a8a'
+                        },
+                        success: {
+                            50: '#f0fdf4',
+                            100: '#dcfce7',
+                            500: '#22c55e',
+                            600: '#16a34a'
+                        },
+                        warning: {
+                            50: '#fffbeb',
+                            100: '#fef3c7',
+                            500: '#f59e0b',
+                            600: '#d97706'
+                        },
+                        danger: {
+                            50: '#fef2f2',
+                            100: '#fee2e2',
+                            500: '#ef4444',
+                            600: '#dc2626'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace']
+                    },
+                    animation: {
+                        'fade-in': 'fadeIn 0.5s ease-in-out',
+                        'slide-up': 'slideUp 0.3s ease-out',
+                        'pulse-soft': 'pulseSoft 2s ease-in-out infinite'
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://unpkg.com/lucide@latest/dist/umd/lucide.js">
+    
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
+        
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
         }
-
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-            overflow: hidden;
+        
+        @keyframes pulseSoft {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.8; }
         }
-
-        .header {
-            background: #4f46e5;
-            color: white;
-            padding: 30px;
-            text-align: center;
+        
+        .glass {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
         }
-
-        .header h1 {
-            font-size: 2.5rem;
-            margin-bottom: 10px;
-        }
-
-        .header p {
-            opacity: 0.9;
-            font-size: 1.1rem;
-        }
-
-        .main {
-            padding: 30px;
-        }
-
-        .step {
-            margin-bottom: 30px;
-            padding: 20px;
-            border: 2px solid #e5e7eb;
-            border-radius: 8px;
-            transition: border-color 0.3s;
-        }
-
-        .step.active {
-            border-color: #4f46e5;
-            background: #f8faff;
-        }
-
-        .step h3 {
-            color: #374151;
-            margin-bottom: 15px;
-            font-size: 1.3rem;
-        }
-
-        .button {
-            background: #4f46e5;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 1rem;
-            transition: background 0.3s;
-            margin-right: 10px;
-            margin-bottom: 10px;
-        }
-
-        .button:hover {
-            background: #3730a3;
-        }
-
-        .button:disabled {
-            background: #9ca3af;
-            cursor: not-allowed;
-        }
-
-        .button.secondary {
-            background: #6b7280;
-            color: white;
-        }
-
-        .button.secondary:hover {
-            background: #4b5563;
-        }
-
-        .input {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #e5e7eb;
-            border-radius: 6px;
-            font-size: 1rem;
-            margin-bottom: 15px;
-        }
-
-        .input:focus {
-            outline: none;
-            border-color: #4f46e5;
-        }
-
-        .status {
-            padding: 15px;
-            border-radius: 6px;
-            margin-bottom: 20px;
-            font-weight: 500;
-        }
-
-        .status.success {
-            background: #d1fae5;
-            color: #065f46;
-            border: 1px solid #a7f3d0;
-        }
-
-        .status.error {
-            background: #fee2e2;
-            color: #991b1b;
-            border: 1px solid #fca5a5;
-        }
-
-        .status.info {
-            background: #dbeafe;
-            color: #1e40af;
-            border: 1px solid #93c5fd;
-        }
-
-        .email-list {
-            max-height: 400px;
-            overflow-y: auto;
-            border: 1px solid #e5e7eb;
-            border-radius: 6px;
-        }
-
-        .email-groups {
-            max-height: 600px;
-            overflow-y: auto;
-        }
-
-        .email-group {
-            border: 1px solid #e5e7eb;
-            border-radius: 8px;
-            margin-bottom: 15px;
-            background: white;
-        }
-
-        .group-header {
-            padding: 20px;
-            background: #f9fafb;
-            border-bottom: 1px solid #e5e7eb;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-radius: 8px 8px 0 0;
-        }
-
-        .group-info h4 {
-            margin: 0 0 8px 0;
-            color: #374151;
-            font-size: 1.1rem;
-        }
-
-        .group-details {
-            display: flex;
-            gap: 15px;
-            flex-wrap: wrap;
-        }
-
-        .email-count {
-            background: #3b82f6;
-            color: white;
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-size: 0.8rem;
-            font-weight: 500;
-        }
-
-        .domain {
-            color: #6b7280;
-            font-family: monospace;
-            font-size: 0.9rem;
-        }
-
-        .group-actions {
-            display: flex;
-            gap: 8px;
-            align-items: center;
-        }
-
-        .group-actions .button.danger {
-            background: #dc2626;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 0.9rem;
-        }
-
-        .group-actions .button.danger:hover {
-            background: #b91c1c;
-        }
-
-        .no-unsubscribe {
-            color: #6b7280;
-            font-style: italic;
-            font-size: 0.9rem;
-        }
-
-        .group-emails {
-            padding: 0 20px 20px 20px;
-        }
-
-        .group-emails details {
-            margin-top: 10px;
-        }
-
-        .group-emails summary {
-            cursor: pointer;
-            color: #4f46e5;
-            font-weight: 500;
-            padding: 5px 0;
-        }
-
-        .group-emails summary:hover {
-            color: #3730a3;
-        }
-
-        .group-emails .email-list {
-            margin-top: 10px;
-            max-height: 300px;
-        }
-
-        .loading {
-            text-align: center;
-            padding: 40px;
-            color: #6b7280;
-        }
-
-        .spinner {
-            border: 4px solid #f3f4f6;
-            border-top: 4px solid #4f46e5;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 20px;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        .progress-container {
-            padding: 20px;
-            background: #f8fafc;
-            border-radius: 8px;
-            border: 1px solid #e2e8f0;
-        }
-
-        .progress-message {
-            font-weight: 500;
-            color: #374151;
-            margin-bottom: 10px;
-            text-align: center;
-        }
-
-        .progress-bar-container {
-            background: #e5e7eb;
-            border-radius: 8px;
-            height: 8px;
-            overflow: hidden;
-            margin-bottom: 8px;
-        }
-
-        .progress-bar {
-            background: linear-gradient(90deg, #4f46e5, #7c3aed);
-            height: 100%;
-            border-radius: 8px;
-            transition: width 0.3s ease;
-            min-width: 2px;
-        }
-
-        .progress-text {
-            text-align: center;
-            font-size: 0.9rem;
-            color: #6b7280;
-            font-weight: 500;
-        }
-
-        .hidden {
-            display: none;
+        
+        .dark .glass {
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
     </style>
 </head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>🤖 Gmail AI Unsubscriber</h1>
-            <p>Automatically find and unsubscribe from junk emails using AI</p>
-        </div>
-
-        <div class="main">
-            <!-- Step 1: Authentication -->
-            <div class="step active" id="step1">
-                <h3>Step 1: Connect your Gmail account</h3>
-                <div id="authStatus">Checking authentication status...</div>
-                <button class="button" onclick="authenticate()">Connect Gmail</button>
-                <div style="margin-top: 10px; font-size: 0.9rem; color: #6b7280;">
-                    <em>Note: Your credentials are stored securely and only used to access your Gmail.</em>
+<body class="h-full bg-gray-50 dark:bg-gray-900 font-sans antialiased">
+    
+    <div class="min-h-full">
+        <!-- Compact Header -->
+        <header class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div class="flex items-center">
+                        <div class="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg mr-3">
+                            <svg class="w-6 h-6 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
+                                Gmail AI Unsubscriber
+                            </h1>
+                            <p class="text-sm text-gray-600 dark:text-gray-400 hidden sm:block">
+                                Smart email cleanup with AI analysis
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div class="flex flex-col sm:flex-row gap-2">
+                        <button id="auth-btn" class="btn btn-primary text-sm">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            Connect Gmail
+                        </button>
+                        <button id="stats-toggle" class="btn btn-secondary text-sm">
+                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 00-2-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v4"></path>
+                            </svg>
+                            Stats
+                        </button>
+                    </div>
                 </div>
             </div>
+        </header>
 
-            <!-- Step 2: Scan emails -->
-            <div class="step" id="step2">
-                <h3>Step 2: Scan for junk emails</h3>
-                <div id="scanStatus"></div>
-                <button class="button" onclick="scanEmails()" id="scanButton" disabled>Scan Emails</button>
-            </div>
-
-            <!-- Step 3: Review results -->
-            <div class="step" id="step3">
-                <h3>Step 3: Review found emails</h3>
-                <div id="emailList"></div>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        let junkEmails = [];
-        let isAuthenticated = false;
-
-        // Check authentication status on page load
-        window.addEventListener('DOMContentLoaded', async () => {
-            await checkAuthenticationStatus();
+        <!-- Main Content -->
+        <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             
-            // Handle OAuth callback if code is present
-            const urlParams = new URLSearchParams(window.location.search);
-            const authStatus = urlParams.get('auth');
-            
-            if (authStatus === 'success') {
-                showStatus('authStatus', 'Gmail connected successfully!', 'success');
-                await checkAuthenticationStatus(); // Refresh auth status
-            } else if (authStatus === 'error') {
-                showStatus('authStatus', 'Authentication failed. Please try again.', 'error');
-            }
-        });
-
-        async function checkAuthenticationStatus() {
-            try {
-                const response = await fetch('/api/emails/auth-status');
-                const data = await response.json();
-                
-                if (data.isAuthenticated) {
-                    isAuthenticated = true;
-                    showStatus('authStatus', data.message, 'success');
-                    
-                    // Hide the connect button and show as completed
-                    const connectButton = document.querySelector('#step1 .button');
-                    connectButton.style.display = 'none';
-                    
-                    // Add a connected indicator
-                    const authStatus = document.getElementById('authStatus');
-                    authStatus.innerHTML += '<br><span style="color: #10b981; font-weight: bold;">✓ Connected</span>';
-                    
-                    // Enable step 2
-                    document.getElementById('step2').classList.add('active');
-                    document.getElementById('scanButton').disabled = false;
-                    
-                    // Show step 1 as completed
-                    document.getElementById('step1').style.opacity = '0.7';
-                    document.getElementById('step1').style.borderColor = '#10b981';
-                } else {
-                    isAuthenticated = false;
-                    showStatus('authStatus', data.message, 'info');
-                }
-            } catch (error) {
-                console.error('Failed to check authentication status:', error);
-                showStatus('authStatus', 'Unable to check authentication status', 'error');
-            }
-        }
-
-        async function authenticate() {
-            try {
-                const response = await fetch('/api/emails/auth-url');
-                const data = await response.json();
-                
-                if (data.authUrl) {
-                    // Show loading state
-                    showStatus('authStatus', 'Redirecting to Google for authentication...', 'info');
-                    
-                    // Redirect to Google OAuth instead of opening popup
-                    window.location.href = data.authUrl;
-                }
-            } catch (error) {
-                showStatus('authStatus', 'Failed to get authentication URL', 'error');
-            }
-        }
-
-        async function scanEmails() {
-            if (!isAuthenticated) return;
-
-            document.getElementById('scanButton').disabled = true;
-            
-            // Show initial progress
-            showProgress('scanStatus', 'Starting email scan...', 0, 0);
-            
-            try {
-                // Start the scan (non-blocking)
-                const scanPromise = fetch('/api/emails/scan');
-                
-                // Poll for progress updates
-                const progressInterval = setInterval(async () => {
-                    try {
-                        const progressResponse = await fetch('/api/emails/progress');
-                        const progress = await progressResponse.json();
-                        
-                        if (progress.status === 'preprocessing') {
-                            const progressText = `Preprocessing emails... (${progress.preprocessed}/${progress.total})`;
-                            const progressPercent = progress.total > 0 
-                                ? Math.round((progress.preprocessed / progress.total) * 100)
-                                : 0;
-                            showProgress('scanStatus', progressText, progressPercent, progress.total);
-                            
-                        } else if (progress.status === 'ai-analysis') {
-                            const progressText = `AI analyzing batch ${progress.currentBatch}/${progress.totalBatches} (${progress.aiCalls} AI calls made)`;
-                            // For AI analysis, calculate based on total processed vs total
-                            const progressPercent = progress.total > 0 
-                                ? Math.round((progress.processed / progress.total) * 100)
-                                : 0;
-                            showProgress('scanStatus', progressText, progressPercent, progress.total);
-                            
-                        } else if (progress.status === 'expanding') {
-                            const progressText = `Expanding emails from junk senders... (${progress.expandingDomains || 0}/${progress.totalDomains || 0} domains, ${progress.expandedEmails || 0} emails found)`;
-                            const progressPercent = progress.totalDomains > 0 
-                                ? Math.round((progress.expandingDomains / progress.totalDomains) * 100)
-                                : 0;
-                            showProgress('scanStatus', progressText, progressPercent, progress.expandedEmails || 0);
-                            
-                        } else if (progress.status === 'starting') {
-                            showProgress('scanStatus', 'Starting email scan...', 0, 0);
-                            
-                        } else if (progress.status === 'complete' || progress.status === 'error') {
-                            clearInterval(progressInterval);
-                        }
-                    } catch (error) {
-                        console.log('Progress update failed:', error);
-                    }
-                }, 1000); // Update every second
-                
-                // Wait for scan to complete
-                const response = await scanPromise;
-                const data = await response.json();
-                
-                // Clear progress polling
-                clearInterval(progressInterval);
-
-                if (response.ok) {
-                    const groups = data.groups || [];
-                    const stats = data.stats || {};
-                    
-                    showStatus('scanStatus', 
-                        `✅ Scan complete! Processed ${data.processed} emails, found ${data.junkEmails} junk emails from ${groups.length} different senders. 
-                        📊 Stats: ${stats.preprocessed} auto-classified, ${stats.aiAnalyzed} AI-analyzed (${stats.totalAICalls} API calls), 
-                        ⏱️ Time: ${Math.round(stats.processingTime / 1000)}s`, 
-                        'success'
-                    );
-                    
-                    if (groups.length > 0) {
-                        displayGroupedEmails(groups);
-                        document.getElementById('step3').classList.add('active');
-                    } else {
-                        showStatus('scanStatus', 'No junk emails found! Your inbox is clean. 🎉', 'info');
-                    }
-                } else {
-                    showStatus('scanStatus', data.error || 'Scan failed', 'error');
-                }
-            } catch (error) {
-                showStatus('scanStatus', 'Scan error: ' + error.message, 'error');
-            }
-
-            document.getElementById('scanButton').disabled = false;
-        }
-
-        function displayGroupedEmails(groups) {
-            const emailList = document.getElementById('emailList');
-            
-            if (groups.length === 0) {
-                emailList.innerHTML = '<p>No emails to display</p>';
-                return;
-            }
-
-            const html = `
-                <div class="email-groups">
-                    ${groups.map((group, index) => `
-                        <div class="email-group">
-                            <div class="group-header">
-                                <div class="group-info">
-                                    <h4>${escapeHtml(group.senderName)}</h4>
-                                    <div class="group-details">
-                                        <span class="email-count">${group.count} emails</span>
-                                        <span class="confidence">${group.averageConfidence}% junk confidence</span>
-                                        <span class="domain">${escapeHtml(group.domain)}</span>
-                                    </div>
-                                </div>
-                                <div class="group-actions">
-                                    ${group.hasUnsubscribe 
-                                        ? `<button class="button danger" onclick="unsubscribeFromSender('${escapeHtml(group.domain)}', ${JSON.stringify(group.emailIds).replace(/"/g, '&quot;')})">
-                                             🚫 Unsubscribe
-                                           </button>`
-                                        : '<span class="no-unsubscribe">No unsubscribe option</span>'
-                                    }
-                                    <button class="button secondary" onclick="skipSender('${escapeHtml(group.domain)}', '${escapeHtml(group.senderName)}')">
-                                        ⏭️ Skip
-                                    </button>
-                                </div>
+            <!-- Collapsible Status Cards -->
+            <div id="stats-section" class="mb-6 hidden">
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                    <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm">
+                        <div class="flex items-center">
+                            <div class="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg mr-3">
+                                <svg class="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                                </svg>
                             </div>
-                            <div class="group-emails">
-                                <details>
-                                    <summary>View ${group.count} emails</summary>
-                                    <div class="email-list">
-                                        ${group.emails.slice(0, 5).map(email => `
-                                            <div class="email-item">
-                                                <div class="email-info">
-                                                    <div class="email-subject">${escapeHtml(email.subject || 'No Subject')}</div>
-                                                    <div class="email-from">${escapeHtml(email.from || 'Unknown Sender')}</div>
-                                                </div>
-                                                <div class="confidence">
-                                                    ${Math.round(email.analysis.confidence * 100)}%
-                                                    <br>
-                                                    <small>${email.analysis.category}</small>
-                                                </div>
-                                            </div>
-                                        `).join('')}
-                                        ${group.emails.length > 5 ? `<p><em>... and ${group.emails.length - 5} more emails</em></p>` : ''}
-                                    </div>
-                                </details>
+                            <div>
+                                <p class="text-xs text-gray-600 dark:text-gray-400">Total</p>
+                                <p class="text-lg font-bold text-gray-900 dark:text-white" id="total-emails">0</p>
                             </div>
                         </div>
-                    `).join('')}
-                </div>
-            `;
-            
-            emailList.innerHTML = html;
-        }
-
-        async function unsubscribeFromSender(senderDomain, emailIds) {
-            if (!confirm(`Are you sure you want to unsubscribe from all emails from ${senderDomain}?`)) {
-                return;
-            }
-
-            // Find the button that was clicked and disable it during the request
-            const button = event.target;
-            const originalText = button.innerHTML;
-            button.disabled = true;
-            button.innerHTML = '⏳ Unsubscribing...';
-
-            try {
-                const response = await fetch('/api/emails/unsubscribe', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ senderDomain, emailIds })
-                });
-
-                const data = await response.json();
-
-                if (response.ok && data.success) {
-                    // Show success message with archive status and unsubscribe link
-                    const archiveStatus = data.archived ? '\n📦 Emails archived successfully!' : '';
-                    
-                    let message = `Successfully processed ${senderDomain}!\n\nMethod: ${data.method}\nAffected emails: ${data.emailCount}${archiveStatus}\n\n${data.details}`;
-                    
-                    // If there's an unsubscribe link, offer to open it
-                    if (data.method === 'link' && data.details && data.details.includes('http')) {
-                        const urlMatch = data.details.match(/https?:\/\/[^\s]+/);
-                        if (urlMatch) {
-                            const unsubscribeUrl = urlMatch[0];
-                            message += `\n\nWould you like to open the unsubscribe link now?`;
-                            
-                            if (confirm(message)) {
-                                window.open(unsubscribeUrl, '_blank');
-                            }
-                        } else {
-                            alert(message);
-                        }
-                    } else {
-                        alert(message);
-                    }
-                    
-                    // Remove the email group from the UI
-                    const groupElement = button.closest('.email-group');
-                    if (groupElement) {
-                        groupElement.style.transition = 'opacity 0.3s ease-out';
-                        groupElement.style.opacity = '0';
-                        setTimeout(() => {
-                            groupElement.remove();
-                            // Update the counter if no groups remain
-                            const remainingGroups = document.querySelectorAll('.email-group');
-                            if (remainingGroups.length === 0) {
-                                document.getElementById('emailList').innerHTML = 
-                                    '<div class="status success">🎉 No more junk emails found! All senders have been unsubscribed from.</div>';
-                            }
-                        }, 300);
-                    }
-                } else {
-                    const message = `Failed to unsubscribe from ${senderDomain}\n\n${data.message || data.error || 'Unknown error'}`;
-                    alert(message);
-                    // Re-enable the button
-                    button.disabled = false;
-                    button.innerHTML = originalText;
-                }
-            } catch (error) {
-                alert(`Error unsubscribing from ${senderDomain}: ${error.message}`);
-                // Re-enable the button
-                button.disabled = false;
-                button.innerHTML = originalText;
-            }
-        }
-
-        async function skipSender(senderDomain, senderName) {
-            if (!confirm(`Are you sure you want to skip emails from ${senderName} (${senderDomain})?\n\nThis will hide all future emails from this sender.`)) {
-                return;
-            }
-
-            // Find the button that was clicked and disable it during the request
-            const button = event.target;
-            const originalText = button.innerHTML;
-            button.disabled = true;
-            button.innerHTML = '⏳ Skipping...';
-
-            try {
-                const response = await fetch('/api/emails/skip', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        senderDomain, 
-                        senderName,
-                        reason: 'User skipped during scan'
-                    })
-                });
-
-                const data = await response.json();
-
-                if (response.ok && data.success) {
-                    alert(`Successfully added ${senderDomain} to skip list!\n\nThese emails will not appear in future scans.`);
-                    
-                    // Remove the email group from the UI
-                    const groupElement = button.closest('.email-group');
-                    if (groupElement) {
-                        groupElement.style.transition = 'opacity 0.3s ease-out';
-                        groupElement.style.opacity = '0';
-                        setTimeout(() => {
-                            groupElement.remove();
-                            // Update the counter if no groups remain
-                            const remainingGroups = document.querySelectorAll('.email-group');
-                            if (remainingGroups.length === 0) {
-                                document.getElementById('emailList').innerHTML = 
-                                    '<div class="status success">🎉 No more junk emails found! All senders processed.</div>';
-                            }
-                        }, 300);
-                    }
-                } else {
-                    alert(`Failed to skip ${senderDomain}\n\n${data.message || data.error || 'Unknown error'}`);
-                    // Re-enable the button
-                    button.disabled = false;
-                    button.innerHTML = originalText;
-                }
-            } catch (error) {
-                alert(`Error skipping ${senderDomain}: ${error.message}`);
-                // Re-enable the button
-                button.disabled = false;
-                button.innerHTML = originalText;
-            }
-        }
-
-        function showStatus(elementId, message, type) {
-            const element = document.getElementById(elementId);
-            element.innerHTML = `<div class="status ${type}">${message}</div>`;
-        }
-
-        function showProgress(elementId, message, percent, total) {
-            const element = document.getElementById(elementId);
-            element.innerHTML = `
-                <div class="progress-container">
-                    <div class="progress-message">${message}</div>
-                    <div class="progress-bar-container">
-                        <div class="progress-bar" style="width: ${percent}%"></div>
                     </div>
-                    <div class="progress-text">${percent}% ${total > 0 ? `(${total} emails)` : ''}</div>
+
+                    <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm">
+                        <div class="flex items-center">
+                            <div class="p-2 bg-green-100 dark:bg-green-900 rounded-lg mr-3">
+                                <svg class="w-4 h-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <p class="text-xs text-gray-600 dark:text-gray-400">Processed</p>
+                                <p class="text-lg font-bold text-gray-900 dark:text-white" id="processed-emails">0</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm">
+                        <div class="flex items-center">
+                            <div class="p-2 bg-yellow-100 dark:bg-yellow-900 rounded-lg mr-3">
+                                <svg class="w-4 h-4 text-yellow-600 dark:text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.732 13.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <p class="text-xs text-gray-600 dark:text-gray-400">Unsubscribed</p>
+                                <p class="text-lg font-bold text-gray-900 dark:text-white" id="unsubscribed-emails">0</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm">
+                        <div class="flex items-center">
+                            <div class="p-2 bg-purple-100 dark:bg-purple-900 rounded-lg mr-3">
+                                <svg class="w-4 h-4 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <p class="text-xs text-gray-600 dark:text-gray-400">Cache Hits</p>
+                                <p class="text-lg font-bold text-gray-900 dark:text-white" id="cache-hits">0</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-            `;
-        }
-
-        function showLoading(elementId) {
-            const element = document.getElementById(elementId);
-            element.innerHTML = `
-                <div class="loading">
-                    <div class="spinner"></div>
-                    <p>Processing...</p>
+                
+                <!-- Performance Details -->
+                <div id="performance-content" class="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4">
+                    <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-3">Performance Details</h4>
+                    <div class="text-sm text-gray-600 dark:text-gray-400">
+                        Click "Stats" to load performance data...
+                    </div>
                 </div>
-            `;
-        }
+            </div>
 
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
+            <!-- Compact Action Bar -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 mb-6">
+                <div class="flex flex-col sm:flex-row gap-3">
+                    <button id="scan-btn" class="btn btn-primary flex-1" disabled>
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                        </svg>
+                        Scan Emails
+                    </button>
+                    
+                    <button id="unsubscribe-btn" class="btn btn-success flex-1" disabled>
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        Unsubscribe All
+                    </button>
+                    
+                    <button id="ai-unsubscribe-btn" class="btn btn-ai flex-1" disabled title="Use AI-powered enhanced unsubscribe (more reliable)">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+                        </svg>
+                        AI Unsubscribe
+                    </button>
+                    
+                    <button id="archive-btn" class="btn btn-secondary flex-1" disabled>
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                        </svg>
+                        Archive All
+                    </button>
+                </div>
+            </div>
 
-        // Check for OAuth callback results
-        function checkAuthStatus() {
-            const urlParams = new URLSearchParams(window.location.search);
-            const authResult = urlParams.get('auth');
-            
-            if (authResult === 'success') {
-                isAuthenticated = true;
-                showStatus('authStatus', 'Successfully authenticated!', 'success');
-                document.getElementById('scanButton').disabled = false;
-                document.getElementById('step2').classList.add('active');
-                // Clean URL
-                window.history.replaceState({}, document.title, window.location.pathname);
-            } else if (authResult === 'error') {
-                showStatus('authStatus', 'Authentication failed. Please try again.', 'error');
-                // Clean URL
-                window.history.replaceState({}, document.title, window.location.pathname);
-            }
-        }
+            <!-- Computer Use Test Section -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 mb-6">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">🤖 Computer Use Test</h3>
+                <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                    Test Claude's Computer Use API with any unsubscribe page. Claude will visually analyze the page and attempt to automate the unsubscribe process.
+                </p>
+                <div class="flex gap-3">
+                    <input 
+                        type="url" 
+                        id="computer-use-url" 
+                        placeholder="Enter unsubscribe page URL (e.g., https://example.com/unsubscribe)" 
+                        class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                    <button 
+                        id="test-computer-use-btn" 
+                        class="btn btn-ai whitespace-nowrap"
+                        title="Test Computer Use on this URL"
+                    >
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+                        </svg>
+                        Test Computer Use
+                    </button>
+                </div>
+                
+                <!-- Computer Use Results -->
+                <div id="computer-use-results" class="hidden mt-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                    <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-2">Computer Use Results:</h4>
+                    <div id="computer-use-content" class="text-sm text-gray-600 dark:text-gray-400"></div>
+                </div>
+            </div>
 
-        // Check authentication status on page load
-        window.addEventListener('DOMContentLoaded', checkAuthStatus);
-    </script>
+            <!-- Progress Section -->
+            <div id="progress-section" class="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 mb-6 hidden">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-sm font-medium text-gray-900 dark:text-white">Processing</h3>
+                    <span id="progress-text" class="text-xs text-gray-600 dark:text-gray-400">0%</span>
+                </div>
+                <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-3">
+                    <div id="progress-bar" class="bg-gradient-to-r from-blue-500 to-purple-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                </div>
+                <div id="progress-details" class="text-xs text-gray-600 dark:text-gray-400"></div>
+            </div>
+
+            <!-- Results Section -->
+            <div id="results-section" class="hidden">
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Scan Results</h3>
+                        <span id="scan-timestamp" class="text-sm text-gray-500 dark:text-gray-400"></span>
+                    </div>
+                    <div id="results-content" class="space-y-4"></div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="fixed bottom-4 right-4 z-50 space-y-2"></div>
+
+    <!-- Custom Button and Component Styles -->
+    <style>
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.75rem 1.5rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            border-radius: 0.75rem;
+            transition: all 0.2s;
+            outline: none;
+            border: 1px solid transparent;
+        }
+        
+        .btn:focus {
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .btn-primary {
+            background-color: #2563eb;
+            color: white;
+        }
+        
+        .btn-primary:hover:not(:disabled) {
+            background-color: #1d4ed8;
+        }
+        
+        .btn-secondary {
+            background-color: white;
+            color: #2563eb;
+            border-color: #bfdbfe;
+        }
+        
+        .btn-secondary:hover:not(:disabled) {
+            background-color: #eff6ff;
+        }
+        
+        .btn-success {
+            background-color: #16a34a;
+            color: white;
+        }
+        
+        .btn-success:hover:not(:disabled) {
+            background-color: #15803d;
+        }
+        
+        .btn-danger {
+            background-color: #dc2626;
+            color: white;
+        }
+        
+        .btn-danger:hover:not(:disabled) {
+            background-color: #b91c1c;
+        }
+        
+        .btn-ai {
+            background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+            color: white;
+        }
+        
+        .btn-ai:hover:not(:disabled) {
+            background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
+        }
+        
+        .btn-outline-light {
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+        }
+        
+        .btn-outline-light:hover:not(:disabled) {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        
+        .dark .btn-secondary {
+            background-color: #374151;
+            color: #60a5fa;
+            border-color: #4b5563;
+        }
+        
+        .dark .btn-secondary:hover:not(:disabled) {
+            background-color: #4b5563;
+        }
+    </style>
+
+    <script src="script.js"></script>
 </body>
 </html>

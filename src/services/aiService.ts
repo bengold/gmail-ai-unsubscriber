@@ -1,20 +1,27 @@
 import OpenAI from 'openai';
 import { AIAnalysisResult } from '../types';
+import { cacheService } from './cacheService';
+import { config } from '../config/env';
 
 export class AIService {
   private openai: OpenAI | null;
   private requestCount: number = 0;
   private lastRequestTime: number = 0;
   private rateLimitDelay: number = 1000; // Start with 1 second delay
+  private model: string;
 
   constructor() {
-    if (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'your_openai_api_key_here') {
+    if (config.openai.apiKey && config.openai.apiKey !== 'your_openai_api_key_here') {
       this.openai = new OpenAI({
-        apiKey: process.env.OPENAI_API_KEY,
+        apiKey: config.openai.apiKey,
+        baseURL: config.openai.baseURL,
       });
+      this.model = config.openai.model;
+      console.log(`🤖 AI Service initialized with model: ${this.model} at ${config.openai.baseURL}`);
     } else {
       console.warn('OpenAI API key not provided. AI analysis will use mock data.');
       this.openai = null;
+      this.model = 'mock';
     }
   }
 
@@ -49,9 +56,24 @@ export class AIService {
   }
 
   async analyzeEmail(email: any): Promise<AIAnalysisResult> {
+    // Create cache key from email content
+    const headers = email.payload.headers;
+    const subject = headers.find((h: any) => h.name === 'Subject')?.value || '';
+    const from = headers.find((h: any) => h.name === 'From')?.value || '';
+    const cacheKey = `${from}-${subject}`.substring(0, 100); // Limit key length
+
+    // Check cache first
+    const cachedResult = cacheService.getCachedAIAnalysis([cacheKey]);
+    if (cachedResult) {
+      console.log(`📦 Cache hit for AI analysis: ${from}`);
+      return cachedResult;
+    }
+
     if (!this.openai) {
       // Return mock analysis when OpenAI is not available
-      return this.getMockAnalysis(email);
+      const mockResult = this.getMockAnalysis(email);
+      cacheService.cacheAIAnalysis([cacheKey], mockResult);
+      return mockResult;
     }
 
     // Rate limiting
@@ -60,9 +82,6 @@ export class AIService {
 
     for (let retryCount = 0; retryCount < 3; retryCount++) {
       try {
-        const headers = email.payload.headers;
-        const subject = headers.find((h: any) => h.name === 'Subject')?.value || '';
-        const from = headers.find((h: any) => h.name === 'From')?.value || '';
         const snippet = email.snippet || '';
 
         const prompt = `
@@ -83,7 +102,7 @@ Respond with JSON:
 `;
 
         const response = await this.openai.chat.completions.create({
-          model: 'gpt-3.5-turbo', // Use cheaper model to reduce costs and rate limits
+          model: this.model,
           messages: [{ role: 'user', content: prompt }],
           temperature: 0.1,
           max_tokens: 300 // Reduced token count
@@ -94,13 +113,19 @@ Respond with JSON:
         // Success! Reduce rate limit delay gradually
         this.rateLimitDelay = Math.max(this.rateLimitDelay * 0.9, 500);
         
-        return {
+        const analysisResult = {
           isJunk: Boolean(result.isJunk),
           confidence: Number(result.confidence) || 0,
           category: result.category || 'legitimate',
           unsubscribeMethod: result.unsubscribeMethod || 'none',
           reasoning: result.reasoning || 'No reasoning provided'
         };
+
+        // Cache the successful result
+        cacheService.cacheAIAnalysis([cacheKey], analysisResult);
+        console.log(`💾 Cached AI analysis for: ${from}`);
+
+        return analysisResult;
       } catch (error: any) {
         console.error(`Error analyzing email (attempt ${retryCount + 1}):`, error.message);
         

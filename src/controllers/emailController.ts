@@ -1,7 +1,9 @@
 import { Request, Response } from 'express';
 import { GmailService } from '../services/gmailService';
 import { AIService } from '../services/aiService';
+import { UnifiedAIService } from '../services/unifiedAIService';
 import { UnsubscribeService } from '../services/unsubscribeService';
+import { ClaudeService } from '../services/claudeService';
 import { EmailPreprocessor } from '../utils/emailPreprocessor';
 import { EmailCache } from '../utils/emailCache';
 import { SkipList } from '../utils/skipList';
@@ -9,13 +11,24 @@ import { SkipList } from '../utils/skipList';
 export class EmailController {
   private gmailService: GmailService;
   private aiService: AIService;
+  private unifiedAIService: UnifiedAIService;
   private unsubscribeService: UnsubscribeService;
+  private claudeService: ClaudeService;
   private currentProgress: any = null;
 
   constructor() {
     this.gmailService = new GmailService();
     this.aiService = new AIService();
+    this.unifiedAIService = new UnifiedAIService();
     this.unsubscribeService = new UnsubscribeService();
+    this.claudeService = new ClaudeService();
+    
+    // Log AI configuration on startup
+    const aiConfig = this.unifiedAIService.getConfigInfo();
+    console.log(`🤖 Using AI Provider: ${aiConfig.provider} with model: ${aiConfig.model}`);
+    if (aiConfig.baseURL) {
+      console.log(`🔗 API Base URL: ${aiConfig.baseURL}`);
+    }
   }
 
   async getAuthUrl(req: Request, res: Response): Promise<void> {
@@ -164,6 +177,8 @@ export class EmailController {
             id: email.id,
             subject: this.getHeader(email, 'Subject'),
             from: this.getHeader(email, 'From'),
+            date: new Date(parseInt(email.internalDate)).toISOString(),
+            internalDate: email.internalDate,
             analysis,
             unsubscribeInfo
           });
@@ -194,7 +209,7 @@ export class EmailController {
           const batchPromises = batch.map(async ({ email, index }) => {
             try {
               const [analysis, unsubscribeInfo] = await Promise.all([
-                this.aiService.analyzeEmail(email),
+                this.unifiedAIService.analyzeEmail(email),
                 this.unsubscribeService.findUnsubscribeMethod(email)
               ]);
               
@@ -202,6 +217,8 @@ export class EmailController {
                 id: email.id,
                 subject: this.getHeader(email, 'Subject'),
                 from: this.getHeader(email, 'From'),
+                date: new Date(parseInt(email.internalDate)).toISOString(),
+                internalDate: email.internalDate,
                 analysis,
                 unsubscribeInfo
               };
@@ -275,18 +292,28 @@ export class EmailController {
               }
             }
             
-            const domainEmails = allEmailsFromDomain.map(fullEmail => ({
-              id: fullEmail.id,
-              from: this.getHeader(fullEmail, 'From'),
-              subject: this.getHeader(fullEmail, 'Subject'),
-              analysis: {
-                isJunk: true,
-                confidence: 0.9,
-                category: 'marketing',
-                reasoning: 'Expanded from confirmed junk sender'
-              },
-              unsubscribeInfo: sampleUnsubscribeInfo // Use the sample for all emails from this domain
-            }));
+            const domainEmails = allEmailsFromDomain.map(fullEmail => {
+              const confidence = EmailPreprocessor.calculateConfidenceScore(
+                fullEmail, 
+                allEmailsFromDomain.length, 
+                sampleUnsubscribeInfo?.hasUnsubscribeLink || false
+              );
+              
+              return {
+                id: fullEmail.id,
+                from: this.getHeader(fullEmail, 'From'),
+                subject: this.getHeader(fullEmail, 'Subject'),
+                date: new Date(parseInt(fullEmail.internalDate)).toISOString(),
+                internalDate: fullEmail.internalDate,
+                analysis: {
+                  isJunk: true,
+                  confidence: confidence,
+                  category: 'marketing',
+                  reasoning: `Expanded from confirmed junk sender (${Math.round(confidence * 100)}% confidence)`
+                },
+                unsubscribeInfo: sampleUnsubscribeInfo // Use the sample for all emails from this domain
+              };
+            });
             
             return { domain, emails: domainEmails };
           } catch (error) {
@@ -332,6 +359,10 @@ export class EmailController {
         expandedEmails: expandedEmails.size,
         groups: groupedEmails,
         stats: {
+          totalEmails: emails.length,
+          processedEmails: analyzed.length,
+          unsubscribedEmails: 0,
+          cacheHits: preprocessResults.length,
           preprocessed: preprocessResults.length,
           aiAnalyzed: aiAnalyzed.length,
           expandedTotal: expandedEmails.size,
@@ -465,6 +496,147 @@ export class EmailController {
     }
   }
 
+  async enhancedUnsubscribe(req: Request, res: Response): Promise<void> {
+    try {
+      const { emailId, senderDomain } = req.body;
+      
+      if (!emailId) {
+        res.status(400).json({ error: 'Missing required field: emailId' });
+        return;
+      }
+
+      // Try to load saved tokens first
+      const hasTokens = await this.gmailService.loadSavedTokens();
+      if (!hasTokens) {
+        res.status(401).json({ error: 'Not authenticated. Please authenticate first.' });
+        return;
+      }
+
+      try {
+        const result = await this.unsubscribeService.performEnhancedUnsubscribe(emailId, this.gmailService);
+        
+        res.json({
+          emailId,
+          senderDomain: senderDomain || 'unknown',
+          success: result.success,
+          method: result.method,
+          message: result.message,
+          url: result.url,
+          error: result.error,
+          enhanced: true
+        });
+      } catch (error) {
+        res.json({
+          emailId,
+          senderDomain: senderDomain || 'unknown',
+          success: false,
+          method: 'manual-fallback',
+          message: 'Enhanced unsubscribe failed',
+          error: error instanceof Error ? error.message : 'Unknown error',
+          enhanced: true
+        });
+      }
+    } catch (error) {
+      console.error('Error in enhanced unsubscribe:', error);
+      res.status(500).json({ error: 'Failed to process enhanced unsubscribe request' });
+    }
+  }
+
+  async enhancedBulkUnsubscribe(req: Request, res: Response): Promise<void> {
+    try {
+      const { senderDomain, emailIds } = req.body;
+      
+      if (!senderDomain || !emailIds || !Array.isArray(emailIds)) {
+        res.status(400).json({ error: 'Missing required fields: senderDomain and emailIds' });
+        return;
+      }
+
+      // Try to load saved tokens first
+      const hasTokens = await this.gmailService.loadSavedTokens();
+      if (!hasTokens) {
+        res.status(401).json({ error: 'Not authenticated. Please authenticate first.' });
+        return;
+      }
+
+      // Process only the first email for now with enhanced unsubscribe
+      // In the future, this could be extended to handle more complex scenarios
+      if (emailIds.length > 0) {
+        try {
+          const result = await this.unsubscribeService.performEnhancedUnsubscribe(emailIds[0], this.gmailService);
+          
+          // Archive all emails regardless of unsubscribe success
+          try {
+            await this.gmailService.archiveMessages(emailIds);
+          } catch (archiveError) {
+            console.error(`Error archiving emails from ${senderDomain}:`, archiveError);
+          }
+          
+          res.json({
+            senderDomain,
+            success: result.success,
+            method: result.method,
+            message: result.message,
+            url: result.url,
+            error: result.error,
+            emailCount: emailIds.length,
+            enhanced: true
+          });
+        } catch (error) {
+          res.json({
+            senderDomain,
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+            emailCount: emailIds.length,
+            enhanced: true
+          });
+        }
+      } else {
+        res.json({
+          senderDomain,
+          success: false,
+          error: 'No emails provided',
+          emailCount: 0,
+          enhanced: true
+        });
+      }
+    } catch (error) {
+      console.error('Error in enhanced bulk unsubscribe:', error);
+      res.status(500).json({ error: 'Failed to process enhanced bulk unsubscribe request' });
+    }
+  }
+
+  async testComputerUse(req: Request, res: Response): Promise<void> {
+    try {
+      const { url } = req.body;
+      
+      if (!url) {
+        res.status(400).json({ error: 'URL is required for computer use test' });
+        return;
+      }
+
+      // Create a mock analysis result for testing
+      const mockAnalysis = {
+        unsubscribeLinks: [url],
+        complexity: 'complex',
+        recommendation: 'Computer use automation recommended'
+      };
+
+      const result = await this.claudeService.attemptUnsubscribe('test-email-id', mockAnalysis);
+      
+      res.json({
+        success: result.success,
+        method: result.method,
+        message: result.message,
+        url: result.url,
+        steps: result.steps,
+        error: result.error
+      });
+    } catch (error) {
+      console.error('Error testing computer use:', error);
+      res.status(500).json({ error: 'Failed to test computer use functionality' });
+    }
+  }
+
   private getHeader(email: any, headerName: string): string {
     const header = email.payload.headers.find((h: any) => h.name === headerName);
     return header ? header.value : '';
@@ -504,12 +676,20 @@ export class EmailController {
       }
     });
     
-    // Convert to array and calculate average confidence
-    return Array.from(groups.values()).map(group => ({
-      ...group,
-      averageConfidence: Math.round((group.totalConfidence / group.count) * 100),
-      emailIds: group.emails.map((e: any) => e.id)
-    })).sort((a, b) => b.count - a.count); // Sort by count descending
+    // Convert to array and calculate average confidence with group size boost
+    return Array.from(groups.values()).map(group => {
+      const baseConfidence = group.totalConfidence / group.count;
+      
+      // Apply group size boost - more emails from same sender = higher confidence it's promotional
+      const groupSizeBoost = Math.min((group.count - 1) * 0.02, 0.1); // Up to 10% boost for large groups
+      const adjustedConfidence = Math.min(baseConfidence + groupSizeBoost, 0.95);
+      
+      return {
+        ...group,
+        averageConfidence: Math.round(adjustedConfidence * 100),
+        emailIds: group.emails.map((e: any) => e.id)
+      };
+    }).sort((a, b) => b.count - a.count); // Sort by count descending
   }
 
   private extractDomain(fromHeader: string): string {
@@ -520,6 +700,209 @@ export class EmailController {
       return domain || 'unknown';
     }
     return 'unknown';
+  }
+
+  async scanMoreEmails(req: Request, res: Response): Promise<void> {
+    try {
+      // Check if user is authenticated
+      const hasTokens = await this.gmailService.loadSavedTokens();
+      if (!hasTokens) {
+        res.status(401).json({ error: 'Not authenticated. Please authenticate first.' });
+        return;
+      }
+
+      // Get additional emails - for now, just get all and filter
+      const { skipProcessed = true } = req.body;
+      
+      console.log(`🔄 Scanning for more emails...`);
+      
+      const emails = await this.gmailService.getSubscriptionEmails();
+      console.log(`📧 Found ${emails.length} total emails`);
+      
+      if (emails.length === 0) {
+        res.json({
+          hasMore: false,
+          groups: [],
+          stats: {
+            processed: 0,
+            junkEmails: 0,
+            expandedEmails: 0
+          }
+        });
+        return;
+      }
+
+      // Process emails with preprocessing and AI analysis
+      const preprocessResults = [];
+      const needsAI = [];
+      let cacheHits = 0;
+      
+      // Check cache and preprocess
+      for (const email of emails) {
+        const cachedAnalysis = EmailCache.getCachedAnalysis(email);
+        if (cachedAnalysis) {
+          preprocessResults.push({
+            id: cachedAnalysis.id,
+            subject: cachedAnalysis.subject,
+            from: cachedAnalysis.from,
+            analysis: cachedAnalysis.analysis,
+            unsubscribeInfo: cachedAnalysis.unsubscribeInfo
+          });
+          cacheHits++;
+          continue;
+        }
+        
+        const preprocessResult = EmailPreprocessor.preprocess(email);
+        
+        if (preprocessResult.needsAI) {
+          needsAI.push(email);
+        } else {
+          const unsubscribeInfo = await this.unsubscribeService.findUnsubscribeMethod(email);
+          const analysis = {
+            isJunk: preprocessResult.category === 'marketing',
+            confidence: preprocessResult.confidence,
+            category: preprocessResult.category,
+            reasoning: preprocessResult.reasoning
+          };
+          
+          preprocessResults.push({
+            id: email.id,
+            subject: this.getHeader(email, 'Subject'),
+            from: this.getHeader(email, 'From'),
+            date: new Date(parseInt(email.internalDate)).toISOString(),
+            internalDate: email.internalDate,
+            analysis,
+            unsubscribeInfo
+          });
+          
+          EmailCache.cacheAnalysis(email, analysis, unsubscribeInfo);
+        }
+      }
+
+      // Process emails that need AI analysis
+      const aiAnalyzed = [];
+      const batchSize = 5; // Smaller batch for continuous scanning
+      
+      if (needsAI.length > 0) {
+        for (let i = 0; i < needsAI.length; i += batchSize) {
+          const batch = needsAI.slice(i, i + batchSize);
+          
+          const batchPromises = batch.map(async (email) => {
+            try {
+              const [analysis, unsubscribeInfo] = await Promise.all([
+                this.unifiedAIService.analyzeEmail(email),
+                this.unsubscribeService.findUnsubscribeMethod(email)
+              ]);
+              
+              const result = {
+                id: email.id,
+                subject: this.getHeader(email, 'Subject'),
+                from: this.getHeader(email, 'From'),
+                date: new Date(parseInt(email.internalDate)).toISOString(),
+                internalDate: email.internalDate,
+                analysis,
+                unsubscribeInfo
+              };
+              
+              EmailCache.cacheAnalysis(email, analysis, unsubscribeInfo);
+              return result;
+            } catch (error) {
+              console.error(`Error processing email ${email.id}:`, error);
+              return null;
+            }
+          });
+          
+          const batchResults = await Promise.all(batchPromises);
+          const successfulResults = batchResults.filter(result => result !== null);
+          aiAnalyzed.push(...successfulResults);
+          
+          // Small delay between batches
+          if (i + batchSize < needsAI.length) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+        }
+      }
+
+      // Combine results
+      const analyzed = [...preprocessResults, ...aiAnalyzed];
+      const junkEmails = analyzed.filter(email => email.analysis.isJunk);
+      
+      console.log(`🔍 Found ${junkEmails.length} additional junk emails`);
+      
+      // For junk emails, expand to get all emails from same senders
+      const expandedEmails = new Map();
+      
+      if (junkEmails.length > 0) {
+        const domainsToProcess = [...new Set(junkEmails.map(email => this.extractDomain(email.from)))];
+        
+        // Process domains with limited concurrency
+        for (const domain of domainsToProcess) {
+          try {
+            const allEmailsFromDomain = await this.gmailService.getAllEmailsFromDomain(domain);
+            
+            let sampleUnsubscribeInfo = null;
+            if (allEmailsFromDomain.length > 0) {
+              try {
+                sampleUnsubscribeInfo = await this.unsubscribeService.findUnsubscribeMethod(allEmailsFromDomain[0]);
+              } catch (error) {
+                console.error(`Error getting unsubscribe info for ${domain}:`, error);
+              }
+            }
+            
+            const domainEmails = allEmailsFromDomain.map(fullEmail => {
+              const confidence = EmailPreprocessor.calculateConfidenceScore(
+                fullEmail, 
+                allEmailsFromDomain.length, 
+                sampleUnsubscribeInfo?.hasUnsubscribeLink || false
+              );
+              
+              return {
+                id: fullEmail.id,
+                from: this.getHeader(fullEmail, 'From'),
+                subject: this.getHeader(fullEmail, 'Subject'),
+                date: new Date(parseInt(fullEmail.internalDate)).toISOString(),
+                internalDate: fullEmail.internalDate,
+                analysis: {
+                  isJunk: true,
+                  confidence: confidence,
+                  category: 'marketing',
+                  reasoning: `Expanded from confirmed junk sender (${Math.round(confidence * 100)}% confidence)`
+                },
+                unsubscribeInfo: sampleUnsubscribeInfo
+              };
+            });
+            
+            for (const emailData of domainEmails) {
+              expandedEmails.set(emailData.id, emailData);
+            }
+          } catch (error) {
+            console.error(`Error expanding emails from ${domain}:`, error);
+          }
+        }
+      }
+      
+      // Group the emails by sender domain
+      const groupedEmails = this.groupEmailsBySender(Array.from(expandedEmails.values()));
+      
+      console.log(`✅ Continuous scan complete: ${analyzed.length} processed, ${expandedEmails.size} total emails found`);
+      
+      res.json({
+        hasMore: false, // For now, always false since we process all available emails
+        processed: analyzed.length,
+        junkEmails: junkEmails.length,
+        expandedEmails: expandedEmails.size,
+        groups: groupedEmails,
+        stats: {
+          preprocessed: preprocessResults.length,
+          aiAnalyzed: aiAnalyzed.length,
+          expandedTotal: expandedEmails.size,
+          cacheHits
+        }
+      });
+    } catch (error) {
+      console.error('Error scanning more emails:', error);
+      res.status(500).json({ error: 'Failed to scan more emails' });
+    }
   }
 
   private extractSenderName(fromHeader: string): string {

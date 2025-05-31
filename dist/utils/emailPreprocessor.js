@@ -15,11 +15,12 @@ class EmailPreprocessor {
         const legitimateScore = this.calculateLegitimateScore(subject, from, snippet);
         // Decision logic
         if (junkScore >= 3) {
+            const confidence = this.calculateConfidenceScore(email, 1, snippet.toLowerCase().includes('unsubscribe'));
             return {
                 needsAI: false,
-                confidence: Math.min(0.7 + (junkScore - 3) * 0.1, 0.95),
+                confidence: confidence,
                 category: 'marketing',
-                reasoning: 'High junk score based on sender/subject patterns'
+                reasoning: `High junk score (${junkScore}) based on sender/subject patterns`
             };
         }
         if (legitimateScore >= 2) {
@@ -27,7 +28,7 @@ class EmailPreprocessor {
                 needsAI: false,
                 confidence: Math.min(0.6 + legitimateScore * 0.1, 0.9),
                 category: 'legitimate',
-                reasoning: 'High legitimate score based on sender patterns'
+                reasoning: `High legitimate score (${legitimateScore}) based on sender patterns`
             };
         }
         // Ambiguous - needs AI analysis
@@ -37,6 +38,55 @@ class EmailPreprocessor {
             category: 'unknown',
             reasoning: 'Requires AI analysis for accurate classification'
         };
+    }
+    static calculateConfidenceScore(email, groupSize = 1, hasUnsubscribeLink = false) {
+        const headers = email.payload.headers;
+        const subject = headers.find((h) => h.name === 'Subject')?.value || '';
+        const from = headers.find((h) => h.name === 'From')?.value || '';
+        const snippet = email.snippet || '';
+        // Extract sender domain
+        const senderDomain = this.extractDomain(from);
+        // Base confidence starts at 50%
+        let confidence = 0.5;
+        // Factor 1: Sender patterns (0-30% boost)
+        const junkScore = this.calculateJunkScore(subject, from, snippet, senderDomain);
+        confidence += Math.min(junkScore * 0.08, 0.3);
+        // Factor 2: Group size - more emails from same sender = higher confidence (0-20% boost)
+        if (groupSize > 1) {
+            const groupBonus = Math.min((groupSize - 1) * 0.05, 0.2);
+            confidence += groupBonus;
+        }
+        // Factor 3: Unsubscribe link presence (10% boost)
+        if (hasUnsubscribeLink) {
+            confidence += 0.1;
+        }
+        // Factor 4: Marketing domain boost (15% boost)
+        if (this.MARKETING_DOMAINS.some(d => senderDomain.includes(d))) {
+            confidence += 0.15;
+        }
+        // Factor 5: Email age - older promotional emails are more likely to be junk (0-10% boost)
+        try {
+            const emailDate = new Date(parseInt(email.internalDate));
+            const daysSinceEmail = (Date.now() - emailDate.getTime()) / (1000 * 60 * 60 * 24);
+            if (daysSinceEmail > 30) {
+                confidence += Math.min(daysSinceEmail / 365 * 0.1, 0.1);
+            }
+        }
+        catch (error) {
+            // Ignore date parsing errors
+        }
+        // Factor 6: Promotional language in subject/snippet (0-15% boost)
+        const promoWords = ['sale', 'deal', 'offer', 'discount', 'free', 'limited time', 'act now', 'expires'];
+        const promoCount = promoWords.filter(word => subject.toLowerCase().includes(word) || snippet.toLowerCase().includes(word)).length;
+        confidence += Math.min(promoCount * 0.03, 0.15);
+        // Factor 7: Newsletter/automation patterns (10% boost)
+        const automationPatterns = ['newsletter', 'automated', 'no-reply', 'noreply', 'donotreply'];
+        const hasAutomationPattern = automationPatterns.some(pattern => from.toLowerCase().includes(pattern) || subject.toLowerCase().includes(pattern));
+        if (hasAutomationPattern) {
+            confidence += 0.1;
+        }
+        // Cap confidence between 0.3 and 0.95
+        return Math.max(0.3, Math.min(0.95, confidence));
     }
     static calculateJunkScore(subject, from, snippet, domain) {
         let score = 0;

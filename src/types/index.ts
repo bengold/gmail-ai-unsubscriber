@@ -36,11 +36,14 @@ export interface EmailData {
 export interface UnsubscribeInfo {
   hasUnsubscribeLink: boolean;
   unsubscribeUrl?: string;
+  unsubscribeLinks: string[];
   listUnsubscribeHeader?: string;
   isMarketingEmail: boolean;
   confidence: number;
   sender: string;
   subject: string;
+  method?: string;
+  complexity?: 'simple' | 'medium' | 'complex';
 }
 
 export interface AIAnalysisResult {

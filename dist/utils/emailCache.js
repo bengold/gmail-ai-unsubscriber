@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.EmailCache = void 0;
+exports.EmailMetadataCache = exports.EmailCache = void 0;
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 class EmailCache {
@@ -140,3 +140,35 @@ class EmailCache {
 exports.EmailCache = EmailCache;
 EmailCache.CACHE_FILE = path.join(process.cwd(), 'cache', 'email-analysis.json');
 EmailCache.CACHE_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
+class EmailMetadataCache {
+    static getCachedMetadata(emailId) {
+        const cached = this.cache.get(emailId);
+        if (cached && Date.now() - cached.timestamp < this.cacheDuration) {
+            return cached.data;
+        }
+        return null;
+    }
+    static cacheMetadata(emailId, metadata) {
+        this.cache.set(emailId, {
+            data: metadata,
+            timestamp: Date.now()
+        });
+    }
+    static clearExpiredCache() {
+        const now = Date.now();
+        for (const [key, value] of this.cache.entries()) {
+            if (now - value.timestamp >= this.cacheDuration) {
+                this.cache.delete(key);
+            }
+        }
+    }
+    static getCacheStats() {
+        return {
+            size: this.cache.size,
+            items: Array.from(this.cache.keys())
+        };
+    }
+}
+exports.EmailMetadataCache = EmailMetadataCache;
+EmailMetadataCache.cache = new Map();
+EmailMetadataCache.cacheDuration = 5 * 60 * 1000; // 5 minutes
