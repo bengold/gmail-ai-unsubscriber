@@ -2,6 +2,7 @@ import { AIService } from './aiService';
 import { ClaudeService } from './claudeService';
 import { config } from '../config/env';
 import { AIAnalysisResult } from '../types';
+import { logger } from '../utils/logger';
 
 export class UnifiedAIService {
   private aiService: AIService;
@@ -13,7 +14,7 @@ export class UnifiedAIService {
     this.claudeService = new ClaudeService();
     this.preferredProvider = config.ai.preferredProvider;
     
-    console.log(`🧠 Unified AI Service initialized with preferred provider: ${this.preferredProvider}`);
+    logger.info(`Unified AI Service initialized with preferred provider: ${this.preferredProvider}`);
   }
 
   /**
@@ -76,7 +77,7 @@ Respond with JSON only:
       
       throw new Error('Unexpected response format from Claude');
     } catch (error) {
-      console.warn('Claude analysis failed, falling back to OpenAI service:', error);
+      logger.warn('Claude analysis failed, falling back to OpenAI service:', error as Error);
       return this.aiService.analyzeEmail(email);
     }
   }

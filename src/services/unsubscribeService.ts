@@ -214,7 +214,7 @@ export class UnsubscribeService {
   }
 
   async performUnsubscribe(unsubscribeInfo: UnsubscribeInfo): Promise<boolean> {
-    console.log(`Simulating unsubscribe from: ${unsubscribeInfo.sender}`);
+    logger.debug(`Simulating unsubscribe from: ${unsubscribeInfo.sender}`);
     return true; // Simulated success
   }
 
@@ -269,7 +269,7 @@ export class UnsubscribeService {
     archived?: boolean;
     enhancedResults?: UnsubscribeResult[];
   }> {
-    console.log(`🚫 Performing bulk unsubscribe from ${senderDomain} for ${emailIds.length} emails`);
+    logger.info(`Performing bulk unsubscribe from ${senderDomain} for ${emailIds.length} emails`);
     
     if (!gmailService) {
       return { success: false, method: 'none', details: 'Gmail service not available' };
@@ -320,7 +320,7 @@ export class UnsubscribeService {
           }
         }
       } catch (error) {
-        console.error(`Error getting unsubscribe info for ${senderDomain}:`, error);
+        logger.error(`Error getting unsubscribe info for ${senderDomain}:`, error as Error);
         method = 'archive-only';
         details = 'Could not determine unsubscribe method. Emails will be archived.';
         success = true;
@@ -332,12 +332,12 @@ export class UnsubscribeService {
     // Always archive the emails to reduce inbox clutter
     if (success && gmailService && emailIds.length > 0) {
       try {
-        console.log(`📦 Archiving ${emailIds.length} emails from ${senderDomain}...`);
+        logger.info(`Archiving ${emailIds.length} emails from ${senderDomain}...`);
         await gmailService.archiveMessages(emailIds);
         archived = true;
-        console.log(`✅ Successfully archived ${emailIds.length} emails from ${senderDomain}`);
+        logger.info(`Successfully archived ${emailIds.length} emails from ${senderDomain}`);
       } catch (error) {
-        console.error(`❌ Failed to archive emails from ${senderDomain}:`, error);
+        logger.error(`Failed to archive emails from ${senderDomain}:`, error as Error);
         details += ' (Note: Failed to archive emails)';
       }
     }

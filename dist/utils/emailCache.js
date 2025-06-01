@@ -36,6 +36,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.EmailMetadataCache = exports.EmailCache = void 0;
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
+const logger_1 = require("./logger");
 class EmailCache {
     static ensureCacheDir() {
         const cacheDir = path.dirname(this.CACHE_FILE);
@@ -61,13 +62,13 @@ class EmailCache {
             const emailHash = this.generateEmailHash(email);
             const cached = cacheData[emailHash];
             if (cached && (Date.now() - cached.cachedAt < this.CACHE_DURATION)) {
-                console.log(`📋 Using cached analysis for email: ${cached.subject}`);
+                logger_1.logger.debug(`Using cached analysis for email: ${cached.subject}`);
                 return cached;
             }
             return null;
         }
         catch (error) {
-            console.error('Error reading email cache:', error);
+            logger_1.logger.error('Error reading email cache:', error);
             return null;
         }
     }
@@ -98,21 +99,21 @@ class EmailCache {
                 }
             });
             fs.writeFileSync(this.CACHE_FILE, JSON.stringify(cacheData, null, 2));
-            console.log(`💾 Cached analysis for email: ${cachedEmail.subject}`);
+            logger_1.logger.debug(`Cached analysis for email: ${cachedEmail.subject}`);
         }
         catch (error) {
-            console.error('Error writing email cache:', error);
+            logger_1.logger.error('Error writing email cache:', error);
         }
     }
     static clearCache() {
         try {
             if (fs.existsSync(this.CACHE_FILE)) {
                 fs.unlinkSync(this.CACHE_FILE);
-                console.log('🗑️ Email cache cleared');
+                logger_1.logger.info('Email cache cleared');
             }
         }
         catch (error) {
-            console.error('Error clearing email cache:', error);
+            logger_1.logger.error('Error clearing email cache:', error);
         }
     }
     static getCacheStats() {

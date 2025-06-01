@@ -7,6 +7,7 @@ exports.AIService = void 0;
 const openai_1 = __importDefault(require("openai"));
 const cacheService_1 = require("./cacheService");
 const env_1 = require("../config/env");
+const logger_1 = require("../utils/logger");
 class AIService {
     constructor() {
         this.requestCount = 0;
@@ -18,10 +19,10 @@ class AIService {
                 baseURL: env_1.config.openai.baseURL,
             });
             this.model = env_1.config.openai.model;
-            console.log(`🤖 AI Service initialized with model: ${this.model} at ${env_1.config.openai.baseURL}`);
+            logger_1.logger.info(`AI Service initialized with model: ${this.model} at ${env_1.config.openai.baseURL}`);
         }
         else {
-            console.warn('OpenAI API key not provided. AI analysis will use mock data.');
+            logger_1.logger.warn('OpenAI API key not provided. AI analysis will use mock data.');
             this.openai = null;
             this.model = 'mock';
         }
@@ -31,7 +32,7 @@ class AIService {
         const timeSinceLastRequest = now - this.lastRequestTime;
         if (timeSinceLastRequest < this.rateLimitDelay) {
             const waitTime = this.rateLimitDelay - timeSinceLastRequest;
-            console.log(`⏱️  Rate limiting: waiting ${waitTime}ms before next request`);
+            logger_1.logger.debug(`Rate limiting: waiting ${waitTime}ms before next request`);
             await new Promise(resolve => setTimeout(resolve, waitTime));
         }
         this.lastRequestTime = Date.now();
@@ -40,13 +41,13 @@ class AIService {
         if (error.code === 'rate_limit_exceeded' && retryCount < 3) {
             // Exponential backoff: 2s, 4s, 8s
             const backoffDelay = Math.pow(2, retryCount + 1) * 1000;
-            console.log(`🚫 Rate limit hit. Retrying in ${backoffDelay / 1000}s... (attempt ${retryCount + 1}/3)`);
+            logger_1.logger.warn(`Rate limit hit. Retrying in ${backoffDelay / 1000}s... (attempt ${retryCount + 1}/3)`);
             // Increase the global rate limit delay
             this.rateLimitDelay = Math.min(this.rateLimitDelay * 1.5, 5000);
             await new Promise(resolve => setTimeout(resolve, backoffDelay));
             return null; // Signal to retry
         }
-        console.log(`❌ Rate limit exceeded. Falling back to mock analysis after ${retryCount} retries.`);
+        logger_1.logger.warn(`Rate limit exceeded. Falling back to mock analysis after ${retryCount} retries.`);
         return null; // Will trigger fallback to mock
     }
     async analyzeEmail(email) {
@@ -58,7 +59,7 @@ class AIService {
         // Check cache first
         const cachedResult = cacheService_1.cacheService.getCachedAIAnalysis([cacheKey]);
         if (cachedResult) {
-            console.log(`📦 Cache hit for AI analysis: ${from}`);
+            logger_1.logger.debug(`Cache hit for AI analysis: ${from}`);
             return cachedResult;
         }
         if (!this.openai) {
@@ -107,11 +108,11 @@ Respond with JSON:
                 };
                 // Cache the successful result
                 cacheService_1.cacheService.cacheAIAnalysis([cacheKey], analysisResult);
-                console.log(`💾 Cached AI analysis for: ${from}`);
+                logger_1.logger.debug(`Cached AI analysis for: ${from}`);
                 return analysisResult;
             }
             catch (error) {
-                console.error(`Error analyzing email (attempt ${retryCount + 1}):`, error.message);
+                logger_1.logger.error(`Error analyzing email (attempt ${retryCount + 1}):`, error);
                 if (error.code === 'rate_limit_exceeded') {
                     const shouldRetry = await this.handleRateLimitError(error, retryCount);
                     if (shouldRetry === null && retryCount < 2) {
@@ -122,7 +123,7 @@ Respond with JSON:
                 break;
             }
         }
-        console.log(`🔄 Falling back to mock analysis for email from: ${this.getHeader(email, 'From')}`);
+        logger_1.logger.info(`Falling back to mock analysis for email from: ${this.getHeader(email, 'From')}`);
         return this.getMockAnalysis(email);
     }
     getHeader(email, headerName) {

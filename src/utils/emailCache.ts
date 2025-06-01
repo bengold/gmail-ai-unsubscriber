@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { logger } from './logger';
 
 interface CachedEmail {
   id: string;
@@ -49,13 +50,13 @@ export class EmailCache {
       const cached = cacheData[emailHash];
 
       if (cached && (Date.now() - cached.cachedAt < this.CACHE_DURATION)) {
-        console.log(`📋 Using cached analysis for email: ${cached.subject}`);
+        logger.debug(`Using cached analysis for email: ${cached.subject}`);
         return cached;
       }
 
       return null;
     } catch (error) {
-      console.error('Error reading email cache:', error);
+      logger.error('Error reading email cache:', error as Error);
       return null;
     }
   }
@@ -93,9 +94,9 @@ export class EmailCache {
       });
 
       fs.writeFileSync(this.CACHE_FILE, JSON.stringify(cacheData, null, 2));
-      console.log(`💾 Cached analysis for email: ${cachedEmail.subject}`);
+      logger.debug(`Cached analysis for email: ${cachedEmail.subject}`);
     } catch (error) {
-      console.error('Error writing email cache:', error);
+      logger.error('Error writing email cache:', error as Error);
     }
   }
 
@@ -103,10 +104,10 @@ export class EmailCache {
     try {
       if (fs.existsSync(this.CACHE_FILE)) {
         fs.unlinkSync(this.CACHE_FILE);
-        console.log('🗑️ Email cache cleared');
+        logger.info('Email cache cleared');
       }
     } catch (error) {
-      console.error('Error clearing email cache:', error);
+      logger.error('Error clearing email cache:', error as Error);
     }
   }
 

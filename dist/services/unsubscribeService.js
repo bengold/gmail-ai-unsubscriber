@@ -184,7 +184,7 @@ class UnsubscribeService {
         return hasMarketingKeywords || hasUnsubscribeHeader;
     }
     async performUnsubscribe(unsubscribeInfo) {
-        console.log(`Simulating unsubscribe from: ${unsubscribeInfo.sender}`);
+        logger_1.logger.debug(`Simulating unsubscribe from: ${unsubscribeInfo.sender}`);
         return true; // Simulated success
     }
     /**
@@ -226,7 +226,7 @@ class UnsubscribeService {
         }
     }
     async performBulkUnsubscribe(emailIds, senderDomain, gmailService) {
-        console.log(`🚫 Performing bulk unsubscribe from ${senderDomain} for ${emailIds.length} emails`);
+        logger_1.logger.info(`Performing bulk unsubscribe from ${senderDomain} for ${emailIds.length} emails`);
         if (!gmailService) {
             return { success: false, method: 'none', details: 'Gmail service not available' };
         }
@@ -275,7 +275,7 @@ class UnsubscribeService {
                 }
             }
             catch (error) {
-                console.error(`Error getting unsubscribe info for ${senderDomain}:`, error);
+                logger_1.logger.error(`Error getting unsubscribe info for ${senderDomain}:`, error);
                 method = 'archive-only';
                 details = 'Could not determine unsubscribe method. Emails will be archived.';
                 success = true;
@@ -285,13 +285,13 @@ class UnsubscribeService {
         // Always archive the emails to reduce inbox clutter
         if (success && gmailService && emailIds.length > 0) {
             try {
-                console.log(`📦 Archiving ${emailIds.length} emails from ${senderDomain}...`);
+                logger_1.logger.info(`Archiving ${emailIds.length} emails from ${senderDomain}...`);
                 await gmailService.archiveMessages(emailIds);
                 archived = true;
-                console.log(`✅ Successfully archived ${emailIds.length} emails from ${senderDomain}`);
+                logger_1.logger.info(`Successfully archived ${emailIds.length} emails from ${senderDomain}`);
             }
             catch (error) {
-                console.error(`❌ Failed to archive emails from ${senderDomain}:`, error);
+                logger_1.logger.error(`Failed to archive emails from ${senderDomain}:`, error);
                 details += ' (Note: Failed to archive emails)';
             }
         }

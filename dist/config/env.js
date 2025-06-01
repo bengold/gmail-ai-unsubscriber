@@ -34,5 +34,7 @@ exports.config = {
     app: {
         port: parseInt(process.env.PORT || '3000'),
         nodeEnv: process.env.NODE_ENV || 'development',
+        logLevel: process.env.LOG_LEVEL || 'INFO',
+        logCompact: process.env.LOG_COMPACT !== 'false',
     }
 };

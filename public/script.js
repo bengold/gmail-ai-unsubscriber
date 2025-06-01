@@ -165,6 +165,12 @@ async function scanEmails() {
             const groups = data.groups || [];
             const stats = data.stats || {};
             
+            // Debug: Log the first group to see its structure
+            if (groups.length > 0) {
+                console.log('First group data:', groups[0]);
+                console.log('First group emails:', groups[0].emails);
+            }
+            
             updateStatistics({
                 totalEmails: data.processed || 0,
                 processedEmails: data.processed || 0,
@@ -245,6 +251,12 @@ function displayResults(groups, stats) {
     resultsSection.classList.remove('hidden');
     
     resultsContent.innerHTML = groups.map((group, groupIndex) => {
+        // Debug: Log each group's email structure
+        if (groupIndex === 0 && group.emails && group.emails.length > 0) {
+            console.log('First email in first group:', group.emails[0]);
+            console.log('Email has subject?', 'subject' in group.emails[0]);
+        }
+        
         const mostRecentDate = group.emails && group.emails.length > 0 
             ? group.emails.reduce((latest, email) => {
                 const emailDate = new Date(email.date || email.internalDate);
@@ -290,19 +302,23 @@ function displayResults(groups, stats) {
                         
                         <!-- Email Subject Lines (Collapsible) -->
                         <div class="mb-3">
-                            <button onclick="toggleSubjects(${groupIndex})" class="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 flex items-center">
+                            <button type="button" onclick="toggleSubjects(${groupIndex})" class="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 flex items-center focus:outline-none">
                                 <svg class="w-4 h-4 mr-1 transform transition-transform" id="subjects-arrow-${groupIndex}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
                                 </svg>
                                 View subject lines (${group.emails.length})
                             </button>
-                            <div id="subjects-${groupIndex}" class="hidden mt-2 pl-5 space-y-1 max-h-40 overflow-y-auto">
-                                ${group.emails.map(email => `
-                                    <div class="text-xs text-gray-600 dark:text-gray-400 py-1 border-l-2 border-gray-200 dark:border-gray-600 pl-3">
-                                        <span class="font-medium">${escapeHtml(email.subject || 'No subject')}</span>
-                                        ${email.date ? `<span class="text-gray-500 dark:text-gray-500 ml-2">(${formatRelativeTime(email.date)})</span>` : ''}
-                                    </div>
-                                `).join('')}
+                            <div id="subjects-${groupIndex}" class="hidden mt-2 pl-5 space-y-1 max-h-40 overflow-y-auto scrollbar-thin">
+                                ${group.emails && group.emails.length > 0 ? group.emails.map(email => {
+                                    const subject = email.subject || 'No subject';
+                                    const dateStr = email.date ? formatRelativeTime(email.date) : '';
+                                    return `
+                                        <div class="text-xs text-gray-600 dark:text-gray-400 py-1 border-l-2 border-gray-200 dark:border-gray-600 pl-3">
+                                            <span class="font-medium">${escapeHtml(subject)}</span>
+                                            ${dateStr ? `<span class="text-gray-500 dark:text-gray-500 ml-2">(${dateStr})</span>` : ''}
+                                        </div>
+                                    `;
+                                }).join('') : '<div class="text-xs text-gray-500">No emails found</div>'}
                             </div>
                         </div>
                     </div>
@@ -350,10 +366,13 @@ function toggleSubjects(groupIndex) {
     
     if (subjectsDiv && arrow) {
         const isHidden = subjectsDiv.classList.contains('hidden');
-        subjectsDiv.classList.toggle('hidden', !isHidden);
+        subjectsDiv.classList.toggle('hidden');
         arrow.style.transform = isHidden ? 'rotate(90deg)' : 'rotate(0deg)';
     }
 }
+
+// Make it globally available
+window.toggleSubjects = toggleSubjects;
 
 async function unsubscribeGroup(sender, event) {
     console.log('DEBUG: unsubscribeGroup called with sender:', sender);

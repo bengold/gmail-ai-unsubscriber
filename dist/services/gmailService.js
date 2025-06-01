@@ -250,7 +250,7 @@ class GmailService {
                         return response.data.messages || [];
                     }
                     catch (error) {
-                        console.error(`Error with query "${query}":`, error);
+                        logger_1.logger.error(`Error with query "${query}":`, error);
                         return [];
                     }
                 });
@@ -271,7 +271,7 @@ class GmailService {
             return uniqueEmails;
         }
         catch (error) {
-            console.error('Error in batch search:', error);
+            logger_1.logger.error('Error in batch search:', error);
             throw error;
         }
     }
@@ -432,17 +432,17 @@ class GmailService {
                 }
                 catch (error) {
                     if (error.status === 429) {
-                        console.log('⏱️ Rate limit hit during archiving, waiting 2s...');
+                        logger_1.logger.debug('Rate limit hit during archiving, waiting 2s...');
                         await this.delay(2000);
                         // Retry the failed message
                         await this.archiveMessage(id);
                     }
                     else {
-                        console.error(`Failed to archive message ${id}:`, error.message);
+                        logger_1.logger.error(`Failed to archive message ${id}: ${error.message}`);
                     }
                 }
             }
-            console.log(`📦 Archived batch of ${batch.length} messages`);
+            logger_1.logger.debug(`Archived batch of ${batch.length} messages`);
         }
     }
     async deleteMessage(messageId) {
@@ -464,7 +464,7 @@ class GmailService {
             return email.data;
         }
         catch (error) {
-            console.error(`Error getting email ${messageId}:`, error);
+            logger_1.logger.error(`Error getting email ${messageId}:`, error);
             throw error;
         }
     }

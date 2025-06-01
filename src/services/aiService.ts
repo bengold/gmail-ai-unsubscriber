@@ -2,6 +2,7 @@ import OpenAI from 'openai';
 import { AIAnalysisResult } from '../types';
 import { cacheService } from './cacheService';
 import { config } from '../config/env';
+import { logger } from '../utils/logger';
 
 export class AIService {
   private openai: OpenAI | null;
@@ -17,9 +18,9 @@ export class AIService {
         baseURL: config.openai.baseURL,
       });
       this.model = config.openai.model;
-      console.log(`🤖 AI Service initialized with model: ${this.model} at ${config.openai.baseURL}`);
+      logger.info(`AI Service initialized with model: ${this.model} at ${config.openai.baseURL}`);
     } else {
-      console.warn('OpenAI API key not provided. AI analysis will use mock data.');
+      logger.warn('OpenAI API key not provided. AI analysis will use mock data.');
       this.openai = null;
       this.model = 'mock';
     }
@@ -31,7 +32,7 @@ export class AIService {
     
     if (timeSinceLastRequest < this.rateLimitDelay) {
       const waitTime = this.rateLimitDelay - timeSinceLastRequest;
-      console.log(`⏱️  Rate limiting: waiting ${waitTime}ms before next request`);
+      logger.debug(`Rate limiting: waiting ${waitTime}ms before next request`);
       await new Promise(resolve => setTimeout(resolve, waitTime));
     }
     
@@ -42,7 +43,7 @@ export class AIService {
     if (error.code === 'rate_limit_exceeded' && retryCount < 3) {
       // Exponential backoff: 2s, 4s, 8s
       const backoffDelay = Math.pow(2, retryCount + 1) * 1000;
-      console.log(`🚫 Rate limit hit. Retrying in ${backoffDelay/1000}s... (attempt ${retryCount + 1}/3)`);
+      logger.warn(`Rate limit hit. Retrying in ${backoffDelay/1000}s... (attempt ${retryCount + 1}/3)`);
       
       // Increase the global rate limit delay
       this.rateLimitDelay = Math.min(this.rateLimitDelay * 1.5, 5000);
@@ -51,7 +52,7 @@ export class AIService {
       return null; // Signal to retry
     }
     
-    console.log(`❌ Rate limit exceeded. Falling back to mock analysis after ${retryCount} retries.`);
+    logger.warn(`Rate limit exceeded. Falling back to mock analysis after ${retryCount} retries.`);
     return null; // Will trigger fallback to mock
   }
 
@@ -65,7 +66,7 @@ export class AIService {
     // Check cache first
     const cachedResult = cacheService.getCachedAIAnalysis([cacheKey]);
     if (cachedResult) {
-      console.log(`📦 Cache hit for AI analysis: ${from}`);
+      logger.debug(`Cache hit for AI analysis: ${from}`);
       return cachedResult;
     }
 
@@ -123,11 +124,11 @@ Respond with JSON:
 
         // Cache the successful result
         cacheService.cacheAIAnalysis([cacheKey], analysisResult);
-        console.log(`💾 Cached AI analysis for: ${from}`);
+        logger.debug(`Cached AI analysis for: ${from}`);
 
         return analysisResult;
       } catch (error: any) {
-        console.error(`Error analyzing email (attempt ${retryCount + 1}):`, error.message);
+        logger.error(`Error analyzing email (attempt ${retryCount + 1}):`, error);
         
         if (error.code === 'rate_limit_exceeded') {
           const shouldRetry = await this.handleRateLimitError(error, retryCount);
@@ -141,7 +142,7 @@ Respond with JSON:
       }
     }
 
-    console.log(`🔄 Falling back to mock analysis for email from: ${this.getHeader(email, 'From')}`);
+    logger.info(`Falling back to mock analysis for email from: ${this.getHeader(email, 'From')}`);
     return this.getMockAnalysis(email);
   }
 

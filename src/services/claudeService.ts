@@ -27,7 +27,7 @@ export class ClaudeService {
       apiKey: config.anthropic.apiKey,
     });
     this.model = config.anthropic.model;
-    console.log(`🤖 Claude Service initialized with model: ${this.model}`);
+    logger.info(`Claude Service initialized with model: ${this.model}`);
   }
 
   /**

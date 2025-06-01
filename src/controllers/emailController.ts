@@ -7,6 +7,7 @@ import { ClaudeService } from '../services/claudeService';
 import { EmailPreprocessor } from '../utils/emailPreprocessor';
 import { EmailCache } from '../utils/emailCache';
 import { SkipList } from '../utils/skipList';
+import { logger } from '../utils/logger';
 
 export class EmailController {
   private gmailService: GmailService;
@@ -25,9 +26,9 @@ export class EmailController {
     
     // Log AI configuration on startup
     const aiConfig = this.unifiedAIService.getConfigInfo();
-    console.log(`🤖 Using AI Provider: ${aiConfig.provider} with model: ${aiConfig.model}`);
+    logger.info(`Using AI Provider: ${aiConfig.provider} with model: ${aiConfig.model}`);
     if (aiConfig.baseURL) {
-      console.log(`🔗 API Base URL: ${aiConfig.baseURL}`);
+      logger.info(`API Base URL: ${aiConfig.baseURL}`);
     }
   }
 
@@ -53,7 +54,7 @@ export class EmailController {
       // Redirect to the main page with success message
       res.redirect('/?auth=success');
     } catch (error) {
-      console.error('OAuth callback error:', error);
+      logger.error('OAuth callback error:', error as Error);
       res.redirect('/?auth=error');
     }
   }
@@ -103,7 +104,7 @@ export class EmailController {
       }
 
       const emails = await this.gmailService.getSubscriptionEmails();
-      console.log(`📧 Found ${emails.length} potential subscription emails`);
+      logger.info(`Found ${emails.length} potential subscription emails`);
       
       // Update progress with initial totals
       this.currentProgress = {
@@ -112,7 +113,7 @@ export class EmailController {
         total: emails.length
       };
 
-      console.log(`🔍 Checking cache and preprocessing ${emails.length} emails...`);
+      logger.info(`Checking cache and preprocessing ${emails.length} emails...`);
       
       // Step 1: Check cache and preprocess emails
       const preprocessResults = [];
@@ -142,17 +143,17 @@ export class EmailController {
         this.currentProgress.preprocessed = i + 1;
       }
 
-      console.log(`📋 Cache check complete: ${cacheHits} from cache, ${needsProcessing.length} need processing`);
+      logger.info(`Cache check complete: ${cacheHits} from cache, ${needsProcessing.length} need processing`);
       
       // Now limit only the emails that need processing (not cached ones)
       const maxNewEmails = 100;
       const emailsToProcess = needsProcessing.slice(0, Math.min(needsProcessing.length, maxNewEmails));
       
       if (needsProcessing.length > maxNewEmails) {
-        console.log(`⚠️ Limited processing to ${maxNewEmails} new emails (${needsProcessing.length - maxNewEmails} skipped this time)`);
+        logger.warn(`Limited processing to ${maxNewEmails} new emails (${needsProcessing.length - maxNewEmails} skipped this time)`);
       }
       
-      console.log(`🔄 Processing ${emailsToProcess.length} new emails (${cacheHits} already cached)`);
+      logger.info(`Processing ${emailsToProcess.length} new emails (${cacheHits} already cached)`);
       
       // Step 2: Process uncached emails with preprocessing and AI
       const needsAI = [];
@@ -188,7 +189,7 @@ export class EmailController {
         }
       }
 
-      console.log(`✅ Preprocessing complete: ${cacheHits} from cache, ${preprocessResults.length - cacheHits} classified, ${needsAI.length} need AI analysis`);
+      logger.info(`Preprocessing complete: ${cacheHits} from cache, ${preprocessResults.length - cacheHits} classified, ${needsAI.length} need AI analysis`);
       
       // Step 2: Process emails that need AI analysis in batches
       this.currentProgress.status = 'ai-analysis';
@@ -203,7 +204,7 @@ export class EmailController {
           const batchNum = Math.floor(i/batchSize) + 1;
           
           this.currentProgress.currentBatch = batchNum;
-          console.log(`🤖 AI analyzing batch ${batchNum}/${this.currentProgress.totalBatches} (${batch.length} emails)...`);
+          logger.progress(`AI analyzing batch ${batchNum}/${this.currentProgress.totalBatches} (${batch.length} emails)`);
           
           // Process emails in batch with parallel unsubscribe info fetching
           const batchPromises = batch.map(async ({ email, index }) => {
@@ -228,7 +229,7 @@ export class EmailController {
               
               return result;
             } catch (error) {
-              console.error(`Error processing email ${email.id}:`, error);
+              logger.error(`Error processing email ${email.id}:`, error as Error);
               return null;
             }
           });
@@ -242,7 +243,7 @@ export class EmailController {
           
           // Add shorter delay between AI batches (faster processing)
           if (batchNum < this.currentProgress.totalBatches) {
-            console.log(`⏱️  Waiting 1 second before next AI batch...`);
+            logger.debug(`Waiting 1 second before next AI batch...`);
             await new Promise(resolve => setTimeout(resolve, 1000));
           }
         }
@@ -255,7 +256,7 @@ export class EmailController {
       const analyzed = [...preprocessResults, ...aiAnalyzed];
       const junkEmails = analyzed.filter(email => email.analysis.isJunk);
       
-      console.log(`🔍 Found ${junkEmails.length} junk emails, expanding to find ALL emails from these senders...`);
+      logger.info(`Found ${junkEmails.length} junk emails, expanding to find ALL emails from these senders`);
       
       // For each junk sender, gather ALL their emails - now in parallel for speed
       this.currentProgress.status = 'expanding';
@@ -267,7 +268,7 @@ export class EmailController {
       
       const expandedEmails = new Map();
       
-      console.log(`🔍 Expanding emails from ${domainsToProcess.length} domains in parallel...`);
+      logger.info(`Expanding emails from ${domainsToProcess.length} domains in parallel...`);
       
       // Process domains in parallel with controlled concurrency
       const concurrency = 3; // Process 3 domains at a time
@@ -277,7 +278,7 @@ export class EmailController {
         const batch = domainsToProcess.slice(i, i + concurrency);
         
         const batchPromises = batch.map(async (domain) => {
-          console.log(`📧 Expanding emails from domain: ${domain}`);
+          logger.debug(`Expanding emails from domain: ${domain}`);
           
           try {
             const allEmailsFromDomain = await this.gmailService.getAllEmailsFromDomain(domain);
@@ -288,7 +289,7 @@ export class EmailController {
               try {
                 sampleUnsubscribeInfo = await this.unsubscribeService.findUnsubscribeMethod(allEmailsFromDomain[0]);
               } catch (error) {
-                console.error(`Error getting unsubscribe info for ${domain}:`, error);
+                logger.error(`Error getting unsubscribe info for ${domain}:`, error as Error);
               }
             }
             
@@ -317,7 +318,7 @@ export class EmailController {
             
             return { domain, emails: domainEmails };
           } catch (error) {
-            console.error(`Error expanding emails from ${domain}:`, error);
+            logger.error(`Error expanding emails from ${domain}:`, error as Error);
             return { domain, emails: [] };
           }
         });
@@ -333,13 +334,23 @@ export class EmailController {
           this.currentProgress.expandedEmails = expandedEmails.size;
         }
         
-        console.log(`✅ Processed ${this.currentProgress.expandingDomains}/${domainsToProcess.length} domains, found ${expandedEmails.size} emails total`);
+        logger.progress(`Processed ${this.currentProgress.expandingDomains}/${domainsToProcess.length} domains, found ${expandedEmails.size} emails total`);
       }
       
-      console.log(`📈 Expanded to ${expandedEmails.size} total emails from junk senders`);
+      logger.info(`Expanded to ${expandedEmails.size} total emails from junk senders`);
       
       // Group the expanded emails by sender domain
       const groupedEmails = this.groupEmailsBySender(Array.from(expandedEmails.values()));
+      
+      // Debug: Log the first group structure
+      if (groupedEmails.length > 0) {
+        logger.info(`First group structure:`, {
+          domain: groupedEmails[0].domain,
+          emailCount: groupedEmails[0].emails?.length || 0,
+          hasEmails: !!groupedEmails[0].emails,
+          firstEmail: groupedEmails[0].emails?.[0]
+        });
+      }
 
       // Update progress to complete
       this.currentProgress = {
@@ -349,8 +360,8 @@ export class EmailController {
         endTime: Date.now()
       };
 
-      console.log(`✅ Scan complete: ${analyzed.length} initially processed, ${expandedEmails.size} total emails found from junk senders`);
-      console.log(`📊 Stats: ${preprocessResults.length} preprocessed, ${this.currentProgress.aiCalls} AI calls made`);
+      logger.info(`Scan complete: ${analyzed.length} initially processed, ${expandedEmails.size} total emails found from junk senders`);
+      logger.info(`Stats: ${preprocessResults.length} preprocessed, ${this.currentProgress.aiCalls} AI calls made`);
 
       res.json({
         total: emails.length,
@@ -371,7 +382,7 @@ export class EmailController {
         }
       });
     } catch (error) {
-      console.error('Error scanning emails:', error);
+      logger.error('Error scanning emails:', error as Error);
       this.currentProgress = {
         status: 'error',
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -420,7 +431,7 @@ export class EmailController {
         });
       }
     } catch (error) {
-      console.error('Error unsubscribing:', error);
+      logger.error('Error unsubscribing:', error as Error);
       res.status(500).json({ error: 'Failed to process unsubscribe request' });
     }
   }
@@ -443,7 +454,7 @@ export class EmailController {
         senderDomain
       });
     } catch (error) {
-      console.error('Error skipping sender:', error);
+      logger.error('Error skipping sender:', error as Error);
       res.status(500).json({ error: 'Failed to skip sender' });
     }
   }
@@ -453,7 +464,7 @@ export class EmailController {
       const skippedSenders = SkipList.getSkippedSenders();
       res.json({ skippedSenders });
     } catch (error) {
-      console.error('Error getting skipped senders:', error);
+      logger.error('Error getting skipped senders:', error as Error);
       res.status(500).json({ error: 'Failed to get skipped senders' });
     }
   }
@@ -475,7 +486,7 @@ export class EmailController {
         senderDomain
       });
     } catch (error) {
-      console.error('Error removing from skip list:', error);
+      logger.error('Error removing from skip list:', error as Error);
       res.status(500).json({ error: 'Failed to remove from skip list' });
     }
   }
@@ -488,7 +499,7 @@ export class EmailController {
         message: isAuthenticated ? 'Gmail account already connected' : 'Gmail authentication required'
       });
     } catch (error) {
-      console.error('Error checking auth status:', error);
+      logger.error('Error checking auth status:', error as Error);
       res.json({ 
         isAuthenticated: false,
         message: 'Gmail authentication required'
@@ -537,7 +548,7 @@ export class EmailController {
         });
       }
     } catch (error) {
-      console.error('Error in enhanced unsubscribe:', error);
+      logger.error('Error in enhanced unsubscribe:', error as Error);
       res.status(500).json({ error: 'Failed to process enhanced unsubscribe request' });
     }
   }
@@ -568,7 +579,7 @@ export class EmailController {
           try {
             await this.gmailService.archiveMessages(emailIds);
           } catch (archiveError) {
-            console.error(`Error archiving emails from ${senderDomain}:`, archiveError);
+            logger.error(`Error archiving emails from ${senderDomain}:`, archiveError as Error);
           }
           
           res.json({
@@ -600,7 +611,7 @@ export class EmailController {
         });
       }
     } catch (error) {
-      console.error('Error in enhanced bulk unsubscribe:', error);
+      logger.error('Error in enhanced bulk unsubscribe:', error as Error);
       res.status(500).json({ error: 'Failed to process enhanced bulk unsubscribe request' });
     }
   }
@@ -632,7 +643,7 @@ export class EmailController {
         error: result.error
       });
     } catch (error) {
-      console.error('Error testing computer use:', error);
+      logger.error('Error testing computer use:', error as Error);
       res.status(500).json({ error: 'Failed to test computer use functionality' });
     }
   }
@@ -652,7 +663,7 @@ export class EmailController {
       
       // Skip emails from senders in the skip list
       if (SkipList.isSkipped(domain)) {
-        console.log(`⏭️ Skipping emails from ${domain} (in skip list)`);
+        logger.debug(`Skipping emails from ${domain} (in skip list)`);
         return;
       }
       
@@ -684,6 +695,12 @@ export class EmailController {
       const groupSizeBoost = Math.min((group.count - 1) * 0.02, 0.1); // Up to 10% boost for large groups
       const adjustedConfidence = Math.min(baseConfidence + groupSizeBoost, 0.95);
       
+      // Log the first group to debug
+      if (groups.size > 0 && group === groups.values().next().value) {
+        logger.debug(`First email group has ${group.emails.length} emails with subjects:`, 
+          group.emails.slice(0, 3).map((e: any) => e.subject));
+      }
+      
       return {
         ...group,
         averageConfidence: Math.round(adjustedConfidence * 100),
@@ -714,10 +731,10 @@ export class EmailController {
       // Get additional emails - for now, just get all and filter
       const { skipProcessed = true } = req.body;
       
-      console.log(`🔄 Scanning for more emails...`);
+      logger.info(`Scanning for more emails...`);
       
       const emails = await this.gmailService.getSubscriptionEmails();
-      console.log(`📧 Found ${emails.length} total emails`);
+      logger.info(`Found ${emails.length} total emails`);
       
       if (emails.length === 0) {
         res.json({
@@ -807,7 +824,7 @@ export class EmailController {
               EmailCache.cacheAnalysis(email, analysis, unsubscribeInfo);
               return result;
             } catch (error) {
-              console.error(`Error processing email ${email.id}:`, error);
+              logger.error(`Error processing email ${email.id}:`, error as Error);
               return null;
             }
           });
@@ -827,7 +844,7 @@ export class EmailController {
       const analyzed = [...preprocessResults, ...aiAnalyzed];
       const junkEmails = analyzed.filter(email => email.analysis.isJunk);
       
-      console.log(`🔍 Found ${junkEmails.length} additional junk emails`);
+      logger.info(`Found ${junkEmails.length} additional junk emails`);
       
       // For junk emails, expand to get all emails from same senders
       const expandedEmails = new Map();
@@ -845,7 +862,7 @@ export class EmailController {
               try {
                 sampleUnsubscribeInfo = await this.unsubscribeService.findUnsubscribeMethod(allEmailsFromDomain[0]);
               } catch (error) {
-                console.error(`Error getting unsubscribe info for ${domain}:`, error);
+                logger.error(`Error getting unsubscribe info for ${domain}:`, error as Error);
               }
             }
             
@@ -876,7 +893,7 @@ export class EmailController {
               expandedEmails.set(emailData.id, emailData);
             }
           } catch (error) {
-            console.error(`Error expanding emails from ${domain}:`, error);
+            logger.error(`Error expanding emails from ${domain}:`, error as Error);
           }
         }
       }
@@ -884,7 +901,7 @@ export class EmailController {
       // Group the emails by sender domain
       const groupedEmails = this.groupEmailsBySender(Array.from(expandedEmails.values()));
       
-      console.log(`✅ Continuous scan complete: ${analyzed.length} processed, ${expandedEmails.size} total emails found`);
+      logger.info(`Continuous scan complete: ${analyzed.length} processed, ${expandedEmails.size} total emails found`);
       
       res.json({
         hasMore: false, // For now, always false since we process all available emails
@@ -900,7 +917,7 @@ export class EmailController {
         }
       });
     } catch (error) {
-      console.error('Error scanning more emails:', error);
+      logger.error('Error scanning more emails:', error as Error);
       res.status(500).json({ error: 'Failed to scan more emails' });
     }
   }
