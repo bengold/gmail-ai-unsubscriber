@@ -8,8 +8,8 @@ async function buildCSS() {
     
     // For now, copy the source CSS as the build output since we're using Tailwind CDN
     // In production, you would use the Tailwind CLI or PostCSS build process
-    const inputPath = path.join(__dirname, 'public/styles.css');
-    const outputPath = path.join(__dirname, 'public/dist/styles.css');
+    const inputPath = path.join(__dirname, '../public/styles.css');
+    const outputPath = path.join(__dirname, '../public/dist/styles.css');
     
     // Create dist directory if it doesn't exist
     const distDir = path.dirname(outputPath);
@@ -39,7 +39,7 @@ if (isWatch) {
   console.log('👀 Watching for CSS changes...');
   const chokidar = require('chokidar');
   
-  chokidar.watch('public/styles.css').on('change', () => {
+  chokidar.watch('../public/styles.css').on('change', () => {
     console.log('🔄 CSS changed, rebuilding...');
     buildCSS();
   });

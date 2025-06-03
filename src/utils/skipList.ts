@@ -13,7 +13,7 @@ interface SkipListData {
 }
 
 export class SkipList {
-  private static readonly SKIP_FILE = path.join(process.cwd(), 'cache', 'skip-list.json');
+  private static readonly SKIP_FILE = path.join(process.cwd(), 'cache', 'data', 'skip-list.json');
   
   private static ensureCacheDir(): void {
     const cacheDir = path.dirname(this.SKIP_FILE);

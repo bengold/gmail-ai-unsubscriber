@@ -139,7 +139,7 @@ class EmailCache {
     }
 }
 exports.EmailCache = EmailCache;
-EmailCache.CACHE_FILE = path.join(process.cwd(), 'cache', 'email-analysis.json');
+EmailCache.CACHE_FILE = path.join(process.cwd(), 'cache', 'data', 'email-analysis.json');
 EmailCache.CACHE_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
 class EmailMetadataCache {
     static getCachedMetadata(emailId) {

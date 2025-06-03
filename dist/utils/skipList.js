@@ -116,4 +116,4 @@ class SkipList {
     }
 }
 exports.SkipList = SkipList;
-SkipList.SKIP_FILE = path.join(process.cwd(), 'cache', 'skip-list.json');
+SkipList.SKIP_FILE = path.join(process.cwd(), 'cache', 'data', 'skip-list.json');

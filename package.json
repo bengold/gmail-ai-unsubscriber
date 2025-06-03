@@ -7,8 +7,8 @@
     "start": "node dist/app.js",
     "dev": "nodemon --exec ts-node src/app.ts",
     "build": "tsc",
-    "build:css": "node build-css.js",
-    "build:css:watch": "node build-css.js --watch",
+    "build:css": "node scripts/build-css.js",
+    "build:css:watch": "node scripts/build-css.js --watch",
     "build:all": "npm run build && npm run build:css",
     "test": "jest"
   },

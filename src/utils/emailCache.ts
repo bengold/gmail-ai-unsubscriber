@@ -17,7 +17,7 @@ interface CacheData {
 }
 
 export class EmailCache {
-  private static readonly CACHE_FILE = path.join(process.cwd(), 'cache', 'email-analysis.json');
+  private static readonly CACHE_FILE = path.join(process.cwd(), 'cache', 'data', 'email-analysis.json');
   private static readonly CACHE_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
   
   private static ensureCacheDir(): void {
